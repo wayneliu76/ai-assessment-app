@@ -229,8 +229,13 @@ def render_teacher_input_screen():
             st.code(full_url, language="text")
             st.caption("請複製上方連結傳送給學生。")
             
-            # 教師也可以自己試做
-            if st.button("或者，教師自己先試做"):
+        # [修正] 將「教師試做」按鈕移出「產生連結」的 if 區塊，避免狀態遺失
+        st.markdown("---")
+        st.markdown("### 🧪 教師試用")
+        if st.button("教師自己先試做 (不需產生連結)", use_container_width=True):
+            if not unit:
+                st.warning("請輸入單元名稱")
+            else:
                 st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
                 start_quiz_generation()
 
@@ -330,6 +335,16 @@ def render_result_screen():
     else:
         st.title("📖 很好的學習機會！")
     st.markdown("</div>", unsafe_allow_html=True)
+
+    # [修正] 恢復詳細的正向回饋訊息 (成長型思維)
+    if correct_count == total_q:
+        st.info("你展現了非常扎實的理解能力，繼續保持這種學習熱情！")
+    elif correct_count >= total_q - 1:
+        st.info("你已經掌握了大部分的觀念，只要再細心一點，下次一定能滿分！")
+    elif correct_count >= total_q / 2:
+        st.info("你已經懂了一半以上的內容，複習一下錯的題目，你會進步神速喔！")
+    else:
+        st.info("別氣餒，每一個錯誤都是變聰明的機會。我們先來看看詳解，把觀念弄清楚！")
 
     col1, col2 = st.columns(2)
     with col1: st.metric("答對題數", f"{correct_count}")
