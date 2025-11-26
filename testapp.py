@@ -414,15 +414,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
-### 步驟三：本地開發的正確設定 (解決 `streamlit.errors.StreamlitSecretNotFoundError`)
-
-要在您的電腦 (Local) 上測試，您必須手動建立一個 `secrets.toml` 檔案。這就像是幫您的電腦發一張「身分證」，讓程式知道金鑰在哪裡。
-
-1.  在您的專案資料夾中，建立一個名為 `.streamlit` 的新資料夾。
-2.  在該資料夾內，建立一個名為 `secrets.toml` 的文字檔。
-3.  在檔案中填入您**新申請的** API Key（注意：不要有引號包住 Key 變數名稱）：
-
-```toml
-GOOGLE_API_KEY = "您的新_API_KEY_貼在這裡"
