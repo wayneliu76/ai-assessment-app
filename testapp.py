@@ -3,7 +3,7 @@ import google.generativeai as genai
 import json
 import time
 import urllib.parse
-import random  # 新增 random 用於隨機選取鼓勵語
+import random
 
 # ==========================================
 # 系統設定與學術常數定義
@@ -157,7 +157,6 @@ def generate_questions(subject, grade, unit, assess_type_key):
         model = genai.GenerativeModel("gemini-2.5-flash-preview-09-2025")
         response = model.generate_content(prompt)
         
-        # [修正] 完整的字串處理邏輯，確保 JSON 格式正確
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
@@ -307,6 +306,10 @@ def render_quiz_screen():
         st.rerun()
         return
 
+    # [關鍵修正]：狀態防護，確保如果還沒作答，絕不顯示解析
+    if st.session_state.user_answer is None:
+        st.session_state.show_explanation = False
+
     current_q = questions[q_index]
     total_q = len(questions)
 
@@ -315,15 +318,21 @@ def render_quiz_screen():
     st.caption(f"🧠 認知層次：{current_q.get('bloomLevel', '綜合')}")
     st.markdown(f"#### {current_q['q']}")
     
+    # [關鍵修正]：根據是否已顯示解析，來決定是否鎖定表單
+    disable_interaction = st.session_state.show_explanation
+
     with st.form(key=f"q_form_{q_index}"):
-        # 使用 key 確保每次題目變更時，radio 元件會重置
+        # [關鍵修正]：
+        # 1. 綁定 index=st.session_state.user_answer 讓選過的答案在鎖定後依然顯示
+        # 2. 設定 disabled=disable_interaction 防止重複提交
         user_choice = st.radio(
             "請選擇答案：", 
             current_q['options'], 
-            index=None,
-            key=f"radio_q{q_index}_{time.time()}" # 使用 timestamp 強制更新 component
+            index=st.session_state.user_answer,
+            key=f"radio_q{q_index}_{time.time()}", # 保持 Key 唯一性以強制刷新
+            disabled=disable_interaction
         )
-        submitted = st.form_submit_button("送出答案")
+        submitted = st.form_submit_button("送出答案", disabled=disable_interaction)
     
     if submitted:
         if user_choice is None:
@@ -409,6 +418,7 @@ def render_result_screen():
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
+            # 回到首頁時，徹底清空所有狀態，防止殘留
             st.session_state.app_state = 'input'
             st.session_state.questions = []
             st.session_state.history = []
