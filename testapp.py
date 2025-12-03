@@ -3,6 +3,7 @@ import google.generativeai as genai
 import json
 import time
 import urllib.parse
+import random  # 新增 random 用於隨機選取鼓勵語
 
 # ==========================================
 # 系統設定與學術常數定義
@@ -11,17 +12,13 @@ import urllib.parse
 st.set_page_config(page_title="教育適性化評量系統", page_icon="🎓", layout="centered")
 
 # [重要] API Key 設定 (資安修正版)
-# 學術依據：Secret Management (機密管理)
-# 我們移除了所有硬編碼的金鑰。現在程式強制要求從安全的 st.secrets 讀取。
-# 1. 雲端執行時：讀取 Streamlit Cloud 的 Secrets
-# 2. 本地執行時：讀取 .streamlit/secrets.toml 檔案
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         API_KEY = st.secrets["GOOGLE_API_KEY"]
         genai.configure(api_key=API_KEY)
     else:
         st.error("❌ 未偵測到 API Key。請設定 secrets.toml (本地) 或 Secrets (雲端)。")
-        st.stop() # 停止執行，避免報錯
+        st.stop() 
 except FileNotFoundError:
     st.error("❌ 找不到 secrets 檔案。請在專案根目錄建立 .streamlit/secrets.toml")
     st.stop()
@@ -57,7 +54,7 @@ ASSESSMENT_TYPES = {
 # 初始化 Session State
 # ==========================================
 if 'app_state' not in st.session_state:
-    st.session_state.app_state = 'input' # input, student_ready, quiz, result
+    st.session_state.app_state = 'input' 
 if 'questions' not in st.session_state:
     st.session_state.questions = []
 if 'current_q_index' not in st.session_state:
@@ -77,10 +74,46 @@ if 'config' not in st.session_state:
 # 核心邏輯函式
 # ==========================================
 
+def get_growth_mindset_feedback(correct_count, total_q):
+    """
+    根據成長型思維 (Growth Mindset) 生成豐富且隨機的正向回饋
+    學術依據: Hattie & Timperley (2007) - Effective Feedback
+    """
+    ratio = correct_count / total_q
+    
+    if ratio == 1.0: # 100%
+        messages = [
+            {"title": "🌟 完美的表現！你是這個單元的小小專家！", "msg": "你展現了非常扎實的理解能力，這代表你之前的努力都得到了回報。試著挑戰更難的題目，繼續擴展你的知識邊界吧！"},
+            {"title": "🏆 太棒了！完全制霸！", "msg": "你的細心與專注讓你獲得了滿分。請保持這份學習的熱情，你是其他同學的好榜樣！"},
+            {"title": "🚀 實力超群！無懈可擊！", "msg": "你不僅掌握了概念，還能精準地應用。這個單元對你來說已經是輕而易舉，準備好迎接下一個挑戰了嗎？"}
+        ]
+    elif ratio >= 0.8: # 80-99%
+        messages = [
+            {"title": "👍 表現優異！只差一點點就全對囉！", "msg": "你已經掌握了絕大部分的關鍵概念。只要再多一點點細心，下次一定能拿滿分。回頭看看那道錯題，那是你變更強的關鍵！"},
+            {"title": "✨ 很棒的成果！", "msg": "你的觀念非常清晰，大部分的問題都難不倒你。把那一點點小錯誤修正過來，你的知識網就完整了！"},
+            {"title": "👏 令人印象深刻的表現！", "msg": "你做得很好！錯誤只是學習過程中的一個小插曲，它提醒我們還有哪些地方可以更精進。"}
+        ]
+    elif ratio >= 0.6: # 60-79%
+        messages = [
+            {"title": "🙂 做得不錯！基礎已經建立起來了！", "msg": "你已經懂了一半以上的內容，這是一個很好的開始。複習一下錯的題目，釐清那些模糊的觀念，你會進步神速喔！"},
+            {"title": "🌱 持續進步中！", "msg": "學習就像馬拉松，你已經跑了一半了。現在是停下來檢查裝備（觀念）的好時機，把不清楚的地方弄懂，下半場會跑得更順！"},
+            {"title": "💪 很好的嘗試！", "msg": "你已經掌握了核心概念。試著分析一下錯誤的原因，是看錯題目還是觀念混淆？只要修正這點，成績就會大幅提升。"}
+        ]
+    else: # < 60%
+        messages = [
+            {"title": "📖 很好的學習機會！我們一起從基礎加油！", "msg": "別氣餒，每一個錯誤都是變聰明的機會。現在我們發現了哪些觀念還不熟，這比全部答對更有價值，因為我們知道該往哪裡努力了！"},
+            {"title": "💡 發現問題是解決問題的開始！", "msg": "這次測驗幫我們照亮了盲點。先別急著做新題目，花點時間把詳解看懂，把基礎打穩，下一次你一定會不一樣！"},
+            {"title": "🧗 學習是一步一腳印的過程！", "msg": "現在覺得難是正常的，這代表你的大腦正在成長。多花一點時間在那些讓你困惑的題目上，堅持下去，你一定學得會！"}
+        ]
+    
+    return random.choice(messages)
+
 def generate_questions(subject, grade, unit, assess_type_key):
-    """
-    呼叫 Gemini API 生成題目
-    """
+    """呼叫 Gemini API 生成題目"""
+    if not API_KEY:
+        st.error("未設定 API Key")
+        return []
+
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
     target_grade = int(grade)
     next_grade = target_grade + 1
@@ -124,7 +157,7 @@ def generate_questions(subject, grade, unit, assess_type_key):
         model = genai.GenerativeModel("gemini-2.5-flash-preview-09-2025")
         response = model.generate_content(prompt)
         
-        # 修復之前截斷的部分：正確清理 Markdown 標記
+        # [修正] 完整的字串處理邏輯，確保 JSON 格式正確
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
@@ -140,6 +173,8 @@ def generate_questions(subject, grade, unit, assess_type_key):
 
 def generate_diagnosis(history_items, grade, subject, unit):
     """生成教師專用的簡短診斷"""
+    if not API_KEY: return "未設定 API Key。"
+    
     error_details = ""
     for idx, item in enumerate(history_items):
         q = item['question']
@@ -185,7 +220,6 @@ def render_teacher_input_screen():
                                options=['placement', 'diagnostic', 'formative', 'summative'],
                                format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
         
-        # 網址輸入優化
         st.markdown("---")
         st.markdown("### 🔗 產生學生連結")
         
@@ -197,7 +231,6 @@ def render_teacher_input_screen():
             4. 若您使用 `localhost`，學生將**無法**連線。
             """)
 
-        # 預設為空，強迫使用者去複製正確的網址
         base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
         
         if st.button("產生連結", type="primary", use_container_width=True):
@@ -209,10 +242,8 @@ def render_teacher_input_screen():
                 st.error("⚠️ 請先填寫應用程式網址。如果您正在本機測試，可填入 http://localhost:8501")
                 return
 
-            # 處理網址結尾斜線
             base_url = base_url_input.rstrip("/")
             
-            # 建立 Query Parameters
             params = {
                 "role": "student",
                 "subject": subject,
@@ -221,15 +252,12 @@ def render_teacher_input_screen():
                 "type": assess_type
             }
             query_string = urllib.parse.urlencode(params)
-            
-            # 組合完整網址
             full_url = f"{base_url}/?{query_string}"
             
             st.success("連結已產生！請複製下方連結給學生：")
             st.code(full_url, language="text")
             st.caption("請複製上方連結傳送給學生。")
             
-        # [修正] 將「教師試做」按鈕移出「產生連結」的 if 區塊，避免狀態遺失
         st.markdown("---")
         st.markdown("### 🧪 教師試用")
         if st.button("教師自己先試做 (不需產生連結)", use_container_width=True):
@@ -240,10 +268,8 @@ def render_teacher_input_screen():
                 start_quiz_generation()
 
 def render_student_welcome_screen():
-    """學生透過連結進入時看到的畫面"""
     st.markdown("## 👋 歡迎來到線上評量")
     
-    # 從 session_state.config 讀取 (由 URL params 解析而來)
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
     
@@ -254,14 +280,21 @@ def render_student_welcome_screen():
         start_quiz_generation()
 
 def start_quiz_generation():
+    """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
     with st.spinner("正在準備試卷中..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
         if questions:
+            # 重置所有與題目相關的狀態
             st.session_state.questions = questions
             st.session_state.current_q_index = 0
             st.session_state.history = []
             st.session_state.generated_diagnosis = ""
+            
+            # [關鍵修正]：強制重置解析顯示狀態與使用者答案
+            st.session_state.show_explanation = False 
+            st.session_state.user_answer = None 
+            
             st.session_state.app_state = 'quiz'
             st.rerun()
 
@@ -279,12 +312,17 @@ def render_quiz_screen():
 
     st.progress((q_index + 1) / total_q)
     st.markdown(f"### Q{q_index + 1} / {total_q}")
-    # 隱藏評量類型標籤，僅保留認知層次 (盲測)
     st.caption(f"🧠 認知層次：{current_q.get('bloomLevel', '綜合')}")
     st.markdown(f"#### {current_q['q']}")
     
     with st.form(key=f"q_form_{q_index}"):
-        user_choice = st.radio("請選擇答案：", current_q['options'], index=None)
+        # 使用 key 確保每次題目變更時，radio 元件會重置
+        user_choice = st.radio(
+            "請選擇答案：", 
+            current_q['options'], 
+            index=None,
+            key=f"radio_q{q_index}_{time.time()}" # 使用 timestamp 強制更新 component
+        )
         submitted = st.form_submit_button("送出答案")
     
     if submitted:
@@ -327,24 +365,13 @@ def render_result_screen():
 
     if correct_count == total_q: st.balloons()
 
-    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-    if correct_count == total_q:
-        st.title("🌟 太棒了！完全掌握！")
-    elif correct_count >= total_q / 2:
-        st.title("👍 做得不錯！繼續加油！")
-    else:
-        st.title("📖 很好的學習機會！")
-    st.markdown("</div>", unsafe_allow_html=True)
+    # 取得豐富的回饋訊息
+    feedback = get_growth_mindset_feedback(correct_count, total_q)
 
-    # [修正] 恢復詳細的正向回饋訊息 (成長型思維)
-    if correct_count == total_q:
-        st.info("你展現了非常扎實的理解能力，繼續保持這種學習熱情！")
-    elif correct_count >= total_q - 1:
-        st.info("你已經掌握了大部分的觀念，只要再細心一點，下次一定能滿分！")
-    elif correct_count >= total_q / 2:
-        st.info("你已經懂了一半以上的內容，複習一下錯的題目，你會進步神速喔！")
-    else:
-        st.info("別氣餒，每一個錯誤都是變聰明的機會。我們先來看看詳解，把觀念弄清楚！")
+    st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
+    st.title(feedback['title'])
+    st.info(feedback['msg'])
+    st.markdown("</div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1: st.metric("答對題數", f"{correct_count}")
@@ -352,7 +379,6 @@ def render_result_screen():
 
     st.divider()
 
-    # 教師專用診斷 (摺疊)
     incorrect_items = [h for h in history if not h['isCorrect']]
     if st.session_state.generated_diagnosis == "":
         if incorrect_items:
@@ -367,7 +393,6 @@ def render_result_screen():
 
     st.divider()
     
-    # 錯題回顧
     if incorrect_items:
         st.subheader("📝 錯題回顧")
         for item in incorrect_items:
@@ -378,12 +403,9 @@ def render_result_screen():
                 st.markdown(f"✅ 正確答案: {q['options'][item['ans']]}")
                 st.markdown(f"💡 **解析**: {q['explanation']}")
 
-    # 判斷是否為學生連結模式，決定按鈕行為
     if st.query_params.get("role") == "student":
         if st.button("🔄 再練習一次 (相同單元)", type="primary", use_container_width=True):
-            # 學生模式：保留 config，只重置題目狀態
-            st.session_state.app_state = 'student_ready' # 跳回學生準備頁，或直接 'quiz' 重新生成
-            # 這裡選擇直接重新生成，體驗較順暢
+            st.session_state.app_state = 'student_ready' 
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
@@ -391,20 +413,18 @@ def render_result_screen():
             st.session_state.questions = []
             st.session_state.history = []
             st.session_state.current_q_index = 0
+            st.session_state.show_explanation = False
+            st.session_state.user_answer = None
             st.session_state.generated_diagnosis = ""
             st.rerun()
 
 # ==========================================
-# 主程式進入點 (路由邏輯)
+# 主程式進入點
 # ==========================================
 
 def main():
-    # 1. 檢查 URL 參數 (Deep Linking)
-    # 注意：st.query_params 是 Streamlit 1.30+ 的新 API
-    # 邏輯：如果 URL 有參數，且 app_state 還在初始 input 狀態，則切換到學生模式
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
-            # 解析參數並寫入 config
             try:
                 st.session_state.config = {
                     "subject": st.query_params["subject"],
@@ -417,7 +437,6 @@ def main():
                 st.error("連結參數有誤，請聯繫教師。")
                 return
 
-    # 2. 狀態機路由
     if st.session_state.app_state == 'input':
         render_teacher_input_screen()
     elif st.session_state.app_state == 'student_ready':
