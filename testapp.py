@@ -325,11 +325,12 @@ def render_quiz_screen():
         # [關鍵修正]：
         # 1. 綁定 index=st.session_state.user_answer 讓選過的答案在鎖定後依然顯示
         # 2. 設定 disabled=disable_interaction 防止重複提交
+        # 3. 移除 timestamp key，確保提交後 Key 不變，能正確讀取狀態
         user_choice = st.radio(
             "請選擇答案：", 
             current_q['options'], 
             index=st.session_state.user_answer,
-            key=f"radio_q{q_index}_{time.time()}", # 保持 Key 唯一性以強制刷新
+            key=f"radio_q{q_index}", 
             disabled=disable_interaction
         )
         submitted = st.form_submit_button("送出答案", disabled=disable_interaction)
