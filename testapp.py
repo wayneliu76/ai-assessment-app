@@ -32,17 +32,17 @@ st.markdown("""
         --text-sub: #4B5563;      /* 次要文字 */
     }
 
-    /* 強制覆寫 Streamlit 預設字體與顏色 (解決深色模式下的顯示問題) */
+    /* 強制覆寫 Streamlit 預設字體與顏色 */
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
-        color: var(--text-main) !important; /* 強制深色文字 */
+        color: var(--text-main) !important; 
         background-color: var(--bg-color);
     }
 
     /* App 主背景 */
     .stApp {
         background-color: var(--bg-color);
-        background-image: radial-gradient(#E5E7EB 1px, transparent 1px); /* 點陣紋理增加質感 */
+        background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
         background-size: 20px 20px;
     }
 
@@ -54,78 +54,105 @@ st.markdown("""
     }
     
     p, div, label, span {
-        color: var(--text-main); /* 確保所有內文都是深色 */
+        color: var(--text-main);
     }
 
-    /* 卡片式容器設計 (Card Design) */
-    /* 針對 Streamlit 的 form 或 container 進行優化 */
+    /* 卡片式容器設計 */
     div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
         background-color: var(--card-bg);
         padding: 2rem;
         border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* 柔和陰影 */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         border: 1px solid #E5E7EB;
         margin-bottom: 1.5rem;
     }
 
-    /* 題目選項 (Radio Buttons) 優化 - 重點修正區域 */
-    div[role="radiogroup"] {
-        gap: 12px;
-        display: flex;
-        flex-direction: column;
+    /* [關鍵修正 1] 下拉選單與輸入框的可讀性優化 */
+    /* 強制設定輸入框背景為白色，文字為深色，邊框為淺灰 */
+    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border-color: #D1D5DB !important;
     }
     
-    div[role="radiogroup"] label {
-        background-color: #F9FAFB !important; /* 極淺灰底 */
-        padding: 16px 20px !important;
-        border-radius: 12px !important;
-        border: 2px solid #E5E7EB !important;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        color: #1F2937 !important; /* 強制深色字 */
-        font-weight: 500;
+    /* 修正下拉選單內部的文字顏色 (避免白字) */
+    div[data-baseweb="select"] span {
+        color: #1F2937 !important;
     }
 
-    /* 滑鼠懸停效果 */
-    div[role="radiogroup"] label:hover {
-        border-color: var(--primary-color) !important;
-        background-color: #EEF2FF !important; /* 淺藍色背景 */
+    /* 修正下拉選單彈出列表 (Popover) 的樣式 */
+    div[data-baseweb="menu"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E7EB !important;
+    }
+    div[data-baseweb="menu"] li {
+        color: #1F2937 !important; 
+        background-color: #FFFFFF !important;
+    }
+    /* 滑鼠懸停在選項上的樣式 */
+    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
+        background-color: #EEF2FF !important; /* 淺藍底 */
         color: var(--primary-color) !important;
     }
 
-    /* 按鈕 (Primary Button) 優化 */
+    /* [關鍵修正 2] 按鈕與選項的可讀性優化 */
+    
+    /* 題目選項 (Radio Buttons) */
+    div[role="radiogroup"] label {
+        background-color: #F9FAFB !important;
+        padding: 16px 20px !important;
+        border-radius: 12px !important;
+        border: 2px solid #E5E7EB !important;
+        color: #1F2937 !important; /* 強制深色字 */
+        font-weight: 500;
+    }
+    div[role="radiogroup"] label:hover {
+        border-color: var(--primary-color) !important;
+        background-color: #EEF2FF !important;
+        color: var(--primary-color) !important;
+    }
+    /* 確保 Radio Button 裡面的小圓點文字也是深色 */
+    div[role="radiogroup"] p {
+        color: inherit !important;
+    }
+
+    /* 按鈕樣式全面重設 */
     div.stButton > button {
-        width: 100%;
-        background-color: var(--primary-color);
-        color: white !important;
-        border: none;
-        padding: 0.75rem 1.5rem;
         border-radius: 12px;
         font-weight: 600;
-        font-size: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);
-        transition: transform 0.1s, box-shadow 0.1s;
-    }
-
-    div.stButton > button:hover {
-        background-color: var(--primary-hover);
-        box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.5);
-        transform: translateY(-2px);
-    }
-
-    div.stButton > button:active {
-        transform: translateY(0);
-    }
-
-    /* 資訊框 (Info/Success/Error) 美化 */
-    .stAlert {
-        border-radius: 12px;
         border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        transition: all 0.2s;
+        padding: 0.75rem 1.5rem;
     }
     
+    /* 主要按鈕 (Primary): 深藍底白字 */
+    div.stButton > button[kind="primary"] {
+        background-color: var(--primary-color) !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: var(--primary-hover) !important;
+        box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.5);
+    }
+    /* 確保按鈕內的文字元素也是白色 */
+    div.stButton > button[kind="primary"] p {
+        color: #FFFFFF !important;
+    }
+
+    /* 次要按鈕 (Secondary): 白底藍字 */
+    div.stButton > button[kind="secondary"] {
+        background-color: #FFFFFF !important;
+        color: var(--primary-color) !important;
+        border: 2px solid var(--primary-color) !important;
+    }
+    div.stButton > button[kind="secondary"]:hover {
+        background-color: #EEF2FF !important;
+    }
+    div.stButton > button[kind="secondary"] p {
+        color: var(--primary-color) !important;
+    }
+
     /* 進度條顏色 */
     .stProgress > div > div > div > div {
         background-color: var(--primary-color);
