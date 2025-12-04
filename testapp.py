@@ -53,7 +53,7 @@ st.markdown("""
         letter-spacing: -0.025em;
     }
     
-    p, div, label, span {
+    p, div, span {
         color: var(--text-main);
     }
 
@@ -68,19 +68,16 @@ st.markdown("""
     }
 
     /* [關鍵修正 1] 下拉選單與輸入框的可讀性優化 */
-    /* 強制設定輸入框背景為白色，文字為深色，邊框為淺灰 */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
         border-color: #D1D5DB !important;
     }
     
-    /* 修正下拉選單內部的文字顏色 (避免白字) */
     div[data-baseweb="select"] span {
         color: #1F2937 !important;
     }
 
-    /* 修正下拉選單彈出列表 (Popover) 的樣式 */
     div[data-baseweb="menu"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E5E7EB !important;
@@ -89,68 +86,81 @@ st.markdown("""
         color: #1F2937 !important; 
         background-color: #FFFFFF !important;
     }
-    /* 滑鼠懸停在選項上的樣式 */
     div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #EEF2FF !important; /* 淺藍底 */
+        background-color: #EEF2FF !important;
         color: var(--primary-color) !important;
     }
 
-    /* [關鍵修正 2] 按鈕與選項的可讀性優化 */
-    
-    /* 題目選項 (Radio Buttons) */
+    /* [關鍵修正 2] 選項按鈕 (Radio Buttons) 的深度修正 */
+    /* 針對 st.radio 的每一個選項標籤 */
     div[role="radiogroup"] label {
-        background-color: #F9FAFB !important;
-        padding: 16px 20px !important;
-        border-radius: 12px !important;
-        border: 2px solid #E5E7EB !important;
-        color: #1F2937 !important; /* 強制深色字 */
-        font-weight: 500;
+        background-color: #FFFFFF !important; /* 改回純白，對比更強 */
+        padding: 12px 16px !important;
+        border-radius: 8px !important;
+        border: 1px solid #E5E7EB !important;
+        color: #1F2937 !important;
+        margin-bottom: 8px !important;
+        transition: all 0.2s ease;
     }
+    
+    /* 強制設定 radio button 內層文字 (p tag) 的顏色 */
+    div[role="radiogroup"] label p {
+        color: #1F2937 !important;
+        font-weight: 500 !important;
+        font-size: 1rem !important;
+    }
+
+    /* 滑鼠懸停效果 */
     div[role="radiogroup"] label:hover {
         border-color: var(--primary-color) !important;
         background-color: #EEF2FF !important;
-        color: var(--primary-color) !important;
-    }
-    /* 確保 Radio Button 裡面的小圓點文字也是深色 */
-    div[role="radiogroup"] p {
-        color: inherit !important;
-    }
-
-    /* 按鈕樣式全面重設 */
-    div.stButton > button {
-        border-radius: 12px;
-        font-weight: 600;
-        border: none;
-        transition: all 0.2s;
-        padding: 0.75rem 1.5rem;
     }
     
-    /* 主要按鈕 (Primary): 深藍底白字 */
-    div.stButton > button[kind="primary"] {
-        background-color: var(--primary-color) !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);
-    }
-    div.stButton > button[kind="primary"]:hover {
-        background-color: var(--primary-hover) !important;
-        box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.5);
-    }
-    /* 確保按鈕內的文字元素也是白色 */
-    div.stButton > button[kind="primary"] p {
-        color: #FFFFFF !important;
+    /* 滑鼠懸停時，文字顏色變更 */
+    div[role="radiogroup"] label:hover p {
+        color: var(--primary-color) !important;
     }
 
-    /* 次要按鈕 (Secondary): 白底藍字 */
-    div.stButton > button[kind="secondary"] {
-        background-color: #FFFFFF !important;
-        color: var(--primary-color) !important;
-        border: 2px solid var(--primary-color) !important;
+    /* [關鍵修正 3] 按鈕樣式全面重設 */
+    /* 一般按鈕 */
+    div.stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+        padding: 0.6rem 1.2rem;
+        background-color: var(--primary-color);
+        color: white !important;
     }
-    div.stButton > button[kind="secondary"]:hover {
-        background-color: #EEF2FF !important;
+    
+    /* 確保按鈕內文字是白色 */
+    div.stButton > button p {
+        color: white !important;
     }
-    div.stButton > button[kind="secondary"] p {
-        color: var(--primary-color) !important;
+
+    div.stButton > button:hover {
+        background-color: var(--primary-hover);
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        transform: translateY(-1px);
+    }
+
+    /* 表單送出按鈕 (Submit Button) 特別強化 */
+    div[data-testid="stFormSubmitButton"] button {
+        background-color: #111827 !important; /* 深黑色背景，強調動作 */
+        color: white !important;
+        width: 100%;
+        border-radius: 8px;
+        padding: 0.75rem;
+    }
+    
+    div[data-testid="stFormSubmitButton"] button:hover {
+        background-color: #000000 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    /* 確保送出按鈕文字也是白色 */
+    div[data-testid="stFormSubmitButton"] button p {
+        color: white !important;
     }
 
     /* 進度條顏色 */
