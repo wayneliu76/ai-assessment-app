@@ -11,6 +11,64 @@ import random
 
 st.set_page_config(page_title="教育適性化評量系統", page_icon="🎓", layout="centered")
 
+# [新增] 自定義 CSS 樣式 (UI/UX 優化)
+# 學術依據: Aesthetics-Usability Effect (美即好用效應)
+# 設計原則: 使用卡片式設計 (Card Design) 與 柔和陰影 (Soft Shadows) 來降低視覺疲勞
+st.markdown("""
+<style>
+    /* 全站字體與背景優化 */
+    .stApp {
+        background-color: #f8f9fa; /* 淺灰背景，護眼 */
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    
+    /* 標題樣式 */
+    h1, h2, h3 {
+        color: #2c3e50;
+        font-weight: 700;
+    }
+    
+    /* 強化資訊區塊 (st.info, st.success 等) 的視覺 */
+    .stAlert {
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    /* 測驗題目卡片化設計 */
+    div[data-testid="stForm"] {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 懸浮感 */
+        border: 1px solid #e0e0e0;
+    }
+
+    /* 按鈕美化 */
+    div.stButton > button {
+        border-radius: 20px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    /* 選項按鈕優化 */
+    div[role="radiogroup"] label {
+        background-color: #f8f9fa;
+        padding: 10px 20px;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        border: 1px solid #e0e0e0;
+        transition: background-color 0.2s;
+    }
+    div[role="radiogroup"] label:hover {
+        background-color: #e9ecef;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # [重要] API Key 設定
 try:
     if "GOOGLE_API_KEY" in st.secrets:
@@ -26,56 +84,64 @@ except Exception as e:
     st.error(f"❌ 金鑰設定發生錯誤: {str(e)}")
     st.stop()
 
-# [核心修正] 根據使用者提供的定義，優化評量策略與難度控制
+# [核心修正] 根據 Wiliam & Leahy (2015) 區分短週期與中週期形成性評量
 ASSESSMENT_TYPES = {
     'placement': {
         'label': '安置性評量 (Placement)',
-        'desc': '教學前評量，了解學生的起點行為與先備知識，作為教學規劃依據。',
+        'desc': '教學前評量，了解學生的起點行為與先備知識。',
         'prompt_instruction': """
-        **定義依據**：在教學前對學生的「起點行為」進行評量，目的是獲知學生具備的行為、特質和知識技能精熟程度。
-        **出題功能與難度策略**：
-        1. **目標**：確認學生是否具備進入本單元學習的「門檻能力」。
-        2. **內容範圍**：請勿測驗本單元的新知識，而是測驗「學習本單元之前必須具備的舊經驗或技能」。
-           - 例如：若單元是「分數的加減」，請測驗「整數加減」與「分數的定義」。
-        3. **難度設定**：基礎 (Basic)。題目應針對該年級應有的基礎能力，確保學生能跟上後續教學。
+        **核心目標**：檢測「先備知識 (Prerequisite Knowledge)」。
+        **出題策略**：
+        1. 請勿直接測驗本單元的新知識，而是測驗「學習本單元之前必須具備的舊經驗或技能」。
+        2. 例如：若單元是「長除法」，請測驗「九九乘法」與「減法」能力。
+        3. 難度設定：基礎 (Basic)。重點在於確認學生是否準備好進入新課程。
         """
     },
     'diagnostic': {
         'label': '診斷性評量 (Diagnostic)',
-        'desc': '旨在發現學生學習困難的成因，提供補救教學參考。',
+        'desc': '發現學生學習困難的成因與迷思概念。',
         'prompt_instruction': """
-        **定義依據**：旨在發現學生學習困難的成因，以提供教師補救教學之參考。
-        **出題功能與難度策略**：
-        1. **目標**：挖掘學生的「迷思概念 (Misconceptions)」或邏輯斷層。
-        2. **內容範圍**：針對本單元中最容易混淆或犯錯的概念。
-        3. **難度設定**：中等 (Medium)，但強調「誘答力」。
-           - **關鍵要求**：錯誤選項 (Distractors) 不能是隨機的，必須對應一種特定的錯誤思考路徑（例如：以為 0.5 > 0.35 是因為位數比較少）。這樣教師才能根據錯項診斷原因。
+        **核心目標**：偵測「迷思概念 (Misconceptions)」。
+        **出題策略**：
+        1. 題目的重點在於「誘答項 (Distractors)」的設計。
+        2. 錯誤選項不能是隨機產生的，必須對應學生常見的特定錯誤邏輯。
+        3. 難度設定：中等，但強調鑑別度。
         """
     },
-    'formative': {
-        'label': '形成性評量 (Formative)',
-        'desc': '提供連續性回饋，幫助了解教學過程中的成敗原因。',
+    'formative_small': {
+        'label': '形成性評量-小單元 (Post-Lesson Check)',
+        'desc': '剛上完課的即時檢測，確認基礎概念吸收，強調高成功率。',
         'prompt_instruction': """
-        **定義依據**：提供教師及學生連續性的回饋資料，了解教學過程中學生學習成敗的原因。
-        **出題功能與難度策略**：
-        1. **目標**：監控學習進度並提供即時回饋 (Feedback)。
-        2. **內容範圍**：涵蓋本單元當前教學的重點概念。
-        3. **難度設定**：中偏難 (Medium-Hard)。
-           - 題目應具備教學鷹架 (Scaffolding) 的功能，讓學生在作答過程中思考。
-           - **詳解要求**：必須非常詳細，引導學生如何修正錯誤，發揮「連續性回饋」的功能。
+        **核心目標**：檢核理解 (Check for Understanding) - 短週期評量。
+        **理論依據**：Rosenshine 的高成功率原則。
+        **出題策略**：
+        1. 範圍鎖定於「剛教完」的特定小概念，不涉及跨單元整合。
+        2. 難度設定：中等偏易 (Medium-Easy)。
+        3. 目標是讓認真上課的學生能有 80% 以上的答對率，建立信心。
+        4. 詳解重點在於「立即確認觀念正確性」。
+        """
+    },
+    'formative_large': {
+        'label': '形成性評量-大單元 (Unit Review)',
+        'desc': '單元結束前的綜合練習，整合概念並加深記憶，難度較高。',
+        'prompt_instruction': """
+        **核心目標**：鞏固與整合 (Consolidation) - 中週期評量。
+        **理論依據**：Bjork 的合適困難度 (Desirable Difficulties)。
+        **出題策略**：
+        1. 範圍涵蓋整個大單元，題目應包含跨概念的比較與整合。
+        2. 難度設定：中偏難 (Medium-Hard)。需給予學生適度挑戰。
+        3. 詳解重點在於「鷹架引導 (Scaffolding)」，教導學生如何串聯不同觀念解題。
         """
     },
     'summative': {
         'label': '總結性評量 (Summative)',
         'desc': '教學結束後，評斷學習成就與教學目標達成度。',
         'prompt_instruction': """
-        **定義依據**：教學告一段落時，用以評斷學生的學習成就、預期教學目標達成的程度。
-        **出題功能與難度策略**：
-        1. **目標**：驗證學習成果的總結性表現 (Achievement)。
-        2. **內容範圍**：全面涵蓋本單元的所有教學目標。
-        3. **難度設定**：混合分佈 (Mixed/Comprehensive)。
-           - 需包含「記憶、理解、應用、分析」等多種認知層次。
-           - 題目應包含綜合應用題，測試學生是否能靈活運用整單元的知識，以判斷「教學目標是否達成」。
+        **核心目標**：驗證「精熟程度 (Mastery)」。
+        **出題策略**：
+        1. 題目應涵蓋本單元的所有重要概念（廣度）。
+        2. 包含應用題與跨概念的綜合題（深度）。
+        3. 難度分佈：混合基礎題與進階挑戰題，以鑑別不同程度的學生。
         """
     }
 }
@@ -134,7 +200,6 @@ def get_growth_mindset_feedback(correct_count, total_q):
 def generate_questions(subject, grade, unit, assess_type_key):
     """
     呼叫 Gemini API 生成題目
-    [修正重點]: 根據評量類型動態插入特定的 Instruction
     """
     if not API_KEY:
         st.error("未設定 API Key")
@@ -184,7 +249,6 @@ def generate_questions(subject, grade, unit, assess_type_key):
         response = model.generate_content(prompt)
         
         text = response.text.strip()
-        # [修正] 補全完整的字串清理邏輯
         if text.startswith("```json"):
             text = text[7:]
         elif text.startswith("```"):
@@ -244,7 +308,7 @@ def render_teacher_input_screen():
         
         # 顯示評量類型的詳細說明，幫助教師選擇
         assess_type = st.radio("評量類型", 
-                               options=['placement', 'diagnostic', 'formative', 'summative'],
+                               options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
                                format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
         
         st.markdown("---")
