@@ -12,8 +12,7 @@ import random
 st.set_page_config(page_title="教育適性化評量系統", page_icon="🎓", layout="centered")
 
 # [新增] 自定義 CSS 樣式 (UI/UX 優化)
-# 學術依據: Aesthetics-Usability Effect (美即好用效應)
-# 設計原則: 使用卡片式設計 (Card Design) 與 柔和陰影 (Soft Shadows) 來降低視覺疲勞
+# 學術依據: Aesthetics-Usability Effect (美即好用效應) & WCAG 2.1 Contrast Guidelines
 st.markdown("""
 <style>
     /* 全站字體與背景優化 */
@@ -54,9 +53,10 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 
-    /* 選項按鈕優化 */
+    /* [關鍵修正] 選項按鈕優化：強制設定文字顏色，解決對比度不足問題 */
     div[role="radiogroup"] label {
-        background-color: #f8f9fa;
+        background-color: #f8f9fa; /* 淺灰底 */
+        color: #333333 !important; /* 強制深灰字 (WCAG Contrast Safe) */
         padding: 10px 20px;
         border-radius: 10px;
         margin-bottom: 8px;
@@ -64,7 +64,20 @@ st.markdown("""
         transition: background-color 0.2s;
     }
     div[role="radiogroup"] label:hover {
-        background-color: #e9ecef;
+        background-color: #e9ecef; /* 滑鼠懸停時稍微變深 */
+        color: #000000 !important; /* 懸停時全黑 */
+        border-color: #ced4da;
+    }
+    /* 選中狀態的視覺回饋 */
+    div[role="radiogroup"] label[data-checked="true"] {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+        color: #0d47a1 !important;
+    }
+    
+    /* 一般文字顏色修正 */
+    p, li, span {
+        color: #4a4a4a;
     }
 </style>
 """, unsafe_allow_html=True)
