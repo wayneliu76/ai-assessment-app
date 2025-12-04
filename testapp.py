@@ -11,74 +11,126 @@ import random
 
 st.set_page_config(page_title="教育適性化評量系統", page_icon="🎓", layout="centered")
 
-# [新增] 自定義 CSS 樣式 (UI/UX 優化)
-# 學術依據: Aesthetics-Usability Effect (美即好用效應) & WCAG 2.1 Contrast Guidelines
+# [重構] 現代化 UI/UX 設計 (Modern Academic Design System)
+# 學術依據: 
+# 1. Cognitive Load Theory (降低外在負荷): 使用卡片式設計將資訊分塊 (Chunking)。
+# 2. WCAG 2.1 (無障礙標準): 強制設定文字與背景的高對比度 (High Contrast)。
+# 3. Aesthetics-Usability Effect: 提升介面美感以增加使用者的容錯率與動機。
+
 st.markdown("""
 <style>
-    /* 全站字體與背景優化 */
+    /* 引入 Google Fonts: Inter (高易讀性無襯線體) */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    /* 全域變數設定 */
+    :root {
+        --primary-color: #4F46E5; /* 靛藍色: 專業、專注 */
+        --primary-hover: #4338CA;
+        --bg-color: #F3F4F6;      /* 柔和淺灰背景 */
+        --card-bg: #FFFFFF;       /* 純白卡片背景 */
+        --text-main: #1F2937;     /* 深灰文字 (非純黑，減少刺眼) */
+        --text-sub: #4B5563;      /* 次要文字 */
+    }
+
+    /* 強制覆寫 Streamlit 預設字體與顏色 (解決深色模式下的顯示問題) */
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: var(--text-main) !important; /* 強制深色文字 */
+        background-color: var(--bg-color);
+    }
+
+    /* App 主背景 */
     .stApp {
-        background-color: #f8f9fa; /* 淺灰背景，護眼 */
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        background-color: var(--bg-color);
+        background-image: radial-gradient(#E5E7EB 1px, transparent 1px); /* 點陣紋理增加質感 */
+        background-size: 20px 20px;
     }
-    
-    /* 標題樣式 */
-    h1, h2, h3 {
-        color: #2c3e50;
+
+    /* 標題與標籤樣式 */
+    h1, h2, h3, h4, h5, h6 {
+        color: #111827 !important;
         font-weight: 700;
+        letter-spacing: -0.025em;
     }
     
-    /* 強化資訊區塊 (st.info, st.success 等) 的視覺 */
+    p, div, label, span {
+        color: var(--text-main); /* 確保所有內文都是深色 */
+    }
+
+    /* 卡片式容器設計 (Card Design) */
+    /* 針對 Streamlit 的 form 或 container 進行優化 */
+    div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
+        background-color: var(--card-bg);
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* 柔和陰影 */
+        border: 1px solid #E5E7EB;
+        margin-bottom: 1.5rem;
+    }
+
+    /* 題目選項 (Radio Buttons) 優化 - 重點修正區域 */
+    div[role="radiogroup"] {
+        gap: 12px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    div[role="radiogroup"] label {
+        background-color: #F9FAFB !important; /* 極淺灰底 */
+        padding: 16px 20px !important;
+        border-radius: 12px !important;
+        border: 2px solid #E5E7EB !important;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        color: #1F2937 !important; /* 強制深色字 */
+        font-weight: 500;
+    }
+
+    /* 滑鼠懸停效果 */
+    div[role="radiogroup"] label:hover {
+        border-color: var(--primary-color) !important;
+        background-color: #EEF2FF !important; /* 淺藍色背景 */
+        color: var(--primary-color) !important;
+    }
+
+    /* 按鈕 (Primary Button) 優化 */
+    div.stButton > button {
+        width: 100%;
+        background-color: var(--primary-color);
+        color: white !important;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.4);
+        transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    div.stButton > button:hover {
+        background-color: var(--primary-hover);
+        box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.5);
+        transform: translateY(-2px);
+    }
+
+    div.stButton > button:active {
+        transform: translateY(0);
+    }
+
+    /* 資訊框 (Info/Success/Error) 美化 */
     .stAlert {
-        border-radius: 10px;
+        border-radius: 12px;
+        border: none;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-
-    /* 測驗題目卡片化設計 */
-    div[data-testid="stForm"] {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 懸浮感 */
-        border: 1px solid #e0e0e0;
-    }
-
-    /* 按鈕美化 */
-    div.stButton > button {
-        border-radius: 20px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-
-    /* [關鍵修正] 選項按鈕優化：強制設定文字顏色，解決對比度不足問題 */
-    div[role="radiogroup"] label {
-        background-color: #f8f9fa; /* 淺灰底 */
-        color: #333333 !important; /* 強制深灰字 (WCAG Contrast Safe) */
-        padding: 10px 20px;
-        border-radius: 10px;
-        margin-bottom: 8px;
-        border: 1px solid #e0e0e0;
-        transition: background-color 0.2s;
-    }
-    div[role="radiogroup"] label:hover {
-        background-color: #e9ecef; /* 滑鼠懸停時稍微變深 */
-        color: #000000 !important; /* 懸停時全黑 */
-        border-color: #ced4da;
-    }
-    /* 選中狀態的視覺回饋 */
-    div[role="radiogroup"] label[data-checked="true"] {
-        background-color: #e3f2fd;
-        border-color: #2196f3;
-        color: #0d47a1 !important;
-    }
     
-    /* 一般文字顏色修正 */
-    p, li, span {
-        color: #4a4a4a;
+    /* 進度條顏色 */
+    .stProgress > div > div > div > div {
+        background-color: var(--primary-color);
     }
+
 </style>
 """, unsafe_allow_html=True)
 
