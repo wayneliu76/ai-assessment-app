@@ -67,17 +67,47 @@ st.markdown("""
         margin-bottom: 1.5rem;
     }
 
-    /* [關鍵修正 1] 下拉選單與輸入框的可讀性優化 */
-    div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
+    /* [關鍵修正 1] 輸入欄位 (Text Input) 的白底黑字化 */
+    /* 針對輸入框容器 */
+    div[data-baseweb="input"] > div {
+        background-color: #FFFFFF !important; /* 強制純白背景 */
+        border: 1px solid #D1D5DB !important; /* 淺灰邊框 */
+        border-radius: 8px !important;
+    }
+    
+    /* 針對輸入框內的文字 (Input Element) */
+    div[data-baseweb="input"] input {
+        color: #000000 !important; /* 強制純黑文字 */
+        caret-color: #000000 !important; /* 游標也是黑色 */
+        font-weight: 500 !important;
+    }
+
+    /* [關鍵修正 2] 產出連結區塊 (st.code) 的白底黑字化 */
+    div[data-testid="stCodeBlock"] {
+        background-color: #FFFFFF !important; /* 純白背景 */
+        border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important;
+    }
+    
+    div[data-testid="stCodeBlock"] code {
+        color: #000000 !important; /* 純黑文字 */
+        font-family: 'Courier New', Courier, monospace !important;
+    }
+    
+    /* 複製按鈕的樣式微調 */
+    div[data-testid="stCodeBlock"] button {
+        color: #4B5563 !important;
+    }
+
+    /* 下拉選單樣式 (Selectbox) */
+    div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
         color: #1F2937 !important;
         border-color: #D1D5DB !important;
     }
-    
     div[data-baseweb="select"] span {
         color: #1F2937 !important;
     }
-
     div[data-baseweb="menu"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E5E7EB !important;
@@ -91,8 +121,7 @@ st.markdown("""
         color: var(--primary-color) !important;
     }
 
-    /* [關鍵修正 2] 選項按鈕 (Radio Buttons) 的深度修正 */
-    /* 針對 st.radio 的每一個選項標籤 */
+    /* [關鍵修正 3] 選項按鈕 (Radio Buttons) 的深度修正 */
     div[role="radiogroup"] label {
         background-color: #FFFFFF !important; /* 改回純白，對比更強 */
         padding: 12px 16px !important;
@@ -103,26 +132,22 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     
-    /* 強制設定 radio button 內層文字 (p tag) 的顏色 */
     div[role="radiogroup"] label p {
         color: #1F2937 !important;
         font-weight: 500 !important;
         font-size: 1rem !important;
     }
 
-    /* 滑鼠懸停效果 */
     div[role="radiogroup"] label:hover {
         border-color: var(--primary-color) !important;
         background-color: #EEF2FF !important;
     }
     
-    /* 滑鼠懸停時，文字顏色變更 */
     div[role="radiogroup"] label:hover p {
         color: var(--primary-color) !important;
     }
 
-    /* [關鍵修正 3] 按鈕樣式全面重設 */
-    /* 一般按鈕 */
+    /* 按鈕樣式全面重設 */
     div.stButton > button {
         border-radius: 8px;
         font-weight: 600;
@@ -133,7 +158,6 @@ st.markdown("""
         color: white !important;
     }
     
-    /* 確保按鈕內文字是白色 */
     div.stButton > button p {
         color: white !important;
     }
@@ -158,7 +182,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     
-    /* 確保送出按鈕文字也是白色 */
     div[data-testid="stFormSubmitButton"] button p {
         color: white !important;
     }
