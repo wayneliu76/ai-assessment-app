@@ -4,195 +4,14 @@ import json
 import time
 import urllib.parse
 import random
+import uuid
+import pandas as pd
 
 # ==========================================
 # 系統設定與學術常數定義
 # ==========================================
 
 st.set_page_config(page_title="教育適性化評量系統", page_icon="🎓", layout="centered")
-
-# [重構] 現代化 UI/UX 設計 (Modern Academic Design System)
-# 學術依據: 
-# 1. Cognitive Load Theory (降低外在負荷): 使用卡片式設計將資訊分塊 (Chunking)。
-# 2. WCAG 2.1 (無障礙標準): 強制設定文字與背景的高對比度 (High Contrast)。
-# 3. Aesthetics-Usability Effect: 提升介面美感以增加使用者的容錯率與動機。
-
-st.markdown("""
-<style>
-    /* 引入 Google Fonts: Inter (高易讀性無襯線體) */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
-    /* 全域變數設定 */
-    :root {
-        --primary-color: #4F46E5; /* 靛藍色: 專業、專注 */
-        --primary-hover: #4338CA;
-        --bg-color: #F3F4F6;      /* 柔和淺灰背景 */
-        --card-bg: #FFFFFF;       /* 純白卡片背景 */
-        --text-main: #1F2937;     /* 深灰文字 (非純黑，減少刺眼) */
-        --text-sub: #4B5563;      /* 次要文字 */
-    }
-
-    /* 強制覆寫 Streamlit 預設字體與顏色 */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-        color: var(--text-main) !important; 
-        background-color: var(--bg-color);
-    }
-
-    /* App 主背景 */
-    .stApp {
-        background-color: var(--bg-color);
-        background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
-        background-size: 20px 20px;
-    }
-
-    /* 標題與標籤樣式 */
-    h1, h2, h3, h4, h5, h6 {
-        color: #111827 !important;
-        font-weight: 700;
-        letter-spacing: -0.025em;
-    }
-    
-    p, div, span {
-        color: var(--text-main);
-    }
-
-    /* 卡片式容器設計 */
-    div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
-        background-color: var(--card-bg);
-        padding: 2rem;
-        border-radius: 16px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        border: 1px solid #E5E7EB;
-        margin-bottom: 1.5rem;
-    }
-
-    /* [關鍵修正 1] 輸入欄位 (Text Input) 的白底黑字化 */
-    /* 針對輸入框容器 */
-    div[data-baseweb="input"] > div {
-        background-color: #FFFFFF !important; /* 強制純白背景 */
-        border: 1px solid #D1D5DB !important; /* 淺灰邊框 */
-        border-radius: 8px !important;
-    }
-    
-    /* 針對輸入框內的文字 (Input Element) */
-    div[data-baseweb="input"] input {
-        color: #000000 !important; /* 強制純黑文字 */
-        caret-color: #000000 !important; /* 游標也是黑色 */
-        font-weight: 500 !important;
-    }
-
-    /* [關鍵修正 2] 產出連結區塊 (st.code) 的白底黑字化 */
-    div[data-testid="stCodeBlock"] {
-        background-color: #FFFFFF !important; /* 純白背景 */
-        border: 1px solid #D1D5DB !important;
-        border-radius: 8px !important;
-    }
-    
-    div[data-testid="stCodeBlock"] code {
-        color: #000000 !important; /* 純黑文字 */
-        font-family: 'Courier New', Courier, monospace !important;
-    }
-    
-    /* 複製按鈕的樣式微調 */
-    div[data-testid="stCodeBlock"] button {
-        color: #4B5563 !important;
-    }
-
-    /* 下拉選單樣式 (Selectbox) */
-    div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        border-color: #D1D5DB !important;
-    }
-    div[data-baseweb="select"] span {
-        color: #1F2937 !important;
-    }
-    div[data-baseweb="menu"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E5E7EB !important;
-    }
-    div[data-baseweb="menu"] li {
-        color: #1F2937 !important; 
-        background-color: #FFFFFF !important;
-    }
-    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #EEF2FF !important;
-        color: var(--primary-color) !important;
-    }
-
-    /* [關鍵修正 3] 選項按鈕 (Radio Buttons) 的深度修正 */
-    div[role="radiogroup"] label {
-        background-color: #FFFFFF !important; /* 改回純白，對比更強 */
-        padding: 12px 16px !important;
-        border-radius: 8px !important;
-        border: 1px solid #E5E7EB !important;
-        color: #1F2937 !important;
-        margin-bottom: 8px !important;
-        transition: all 0.2s ease;
-    }
-    
-    div[role="radiogroup"] label p {
-        color: #1F2937 !important;
-        font-weight: 500 !important;
-        font-size: 1rem !important;
-    }
-
-    div[role="radiogroup"] label:hover {
-        border-color: var(--primary-color) !important;
-        background-color: #EEF2FF !important;
-    }
-    
-    div[role="radiogroup"] label:hover p {
-        color: var(--primary-color) !important;
-    }
-
-    /* 按鈕樣式全面重設 */
-    div.stButton > button {
-        border-radius: 8px;
-        font-weight: 600;
-        border: 1px solid transparent;
-        transition: all 0.2s;
-        padding: 0.6rem 1.2rem;
-        background-color: var(--primary-color);
-        color: white !important;
-    }
-    
-    div.stButton > button p {
-        color: white !important;
-    }
-
-    div.stButton > button:hover {
-        background-color: var(--primary-hover);
-        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
-        transform: translateY(-1px);
-    }
-
-    /* 表單送出按鈕 (Submit Button) 特別強化 */
-    div[data-testid="stFormSubmitButton"] button {
-        background-color: #111827 !important; /* 深黑色背景，強調動作 */
-        color: white !important;
-        width: 100%;
-        border-radius: 8px;
-        padding: 0.75rem;
-    }
-    
-    div[data-testid="stFormSubmitButton"] button:hover {
-        background-color: #000000 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    
-    div[data-testid="stFormSubmitButton"] button p {
-        color: white !important;
-    }
-
-    /* 進度條顏色 */
-    .stProgress > div > div > div > div {
-        background-color: var(--primary-color);
-    }
-
-</style>
-""", unsafe_allow_html=True)
 
 # [重要] API Key 設定
 try:
@@ -209,7 +28,29 @@ except Exception as e:
     st.error(f"❌ 金鑰設定發生錯誤: {str(e)}")
     st.stop()
 
-# [核心修正] 根據 Wiliam & Leahy (2015) 區分短週期與中週期形成性評量
+# [新增] 模擬資料庫 (Mock Database) - 用於無 Firestore 環境下的展示
+if 'mock_db' not in st.session_state:
+    st.session_state.mock_db = {} # 結構: {session_id: [student_record_1, ...]}
+
+def save_result_to_db(session_id, student_name, score, total, history):
+    """將學生作答結果存入資料庫 (目前為模擬)"""
+    record = {
+        "student_name": student_name,
+        "score": score,
+        "total": total,
+        "timestamp": time.time(),
+        "details": history
+    }
+    if session_id not in st.session_state.mock_db:
+        st.session_state.mock_db[session_id] = []
+    st.session_state.mock_db[session_id].append(record)
+    return True
+
+def get_class_stats(session_id):
+    """讀取班級數據進行分析"""
+    return st.session_state.mock_db.get(session_id, [])
+
+# [評量類型定義] 包含詳細的出題策略與理論基礎
 ASSESSMENT_TYPES = {
     'placement': {
         'label': '安置性評量 (Placement)',
@@ -290,6 +131,149 @@ if 'generated_diagnosis' not in st.session_state:
     st.session_state.generated_diagnosis = ""
 if 'config' not in st.session_state:
     st.session_state.config = {}
+if 'student_name' not in st.session_state:
+    st.session_state.student_name = "Unknown"
+
+# [CSS 重構] 現代化 UI/UX 設計 - 高對比度與易讀性優化
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    :root {
+        --primary-color: #4F46E5;
+        --primary-hover: #4338CA;
+        --bg-color: #F3F4F6;
+        --card-bg: #FFFFFF;
+        --text-main: #1F2937;
+        --text-sub: #4B5563;
+    }
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        color: var(--text-main) !important; 
+        background-color: var(--bg-color);
+    }
+    .stApp {
+        background-color: var(--bg-color);
+        background-image: radial-gradient(#E5E7EB 1px, transparent 1px);
+        background-size: 20px 20px;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #111827 !important;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+    }
+    p, div, span {
+        color: var(--text-main);
+    }
+    div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div[style*="background-color"] {
+        background-color: var(--card-bg);
+        padding: 2rem;
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border: 1px solid #E5E7EB;
+        margin-bottom: 1.5rem;
+    }
+    /* 輸入框高對比度修正 */
+    div[data-baseweb="input"] > div {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important;
+    }
+    div[data-baseweb="input"] input {
+        color: #000000 !important;
+        caret-color: #000000 !important;
+        font-weight: 500 !important;
+    }
+    /* 代碼區塊高對比度修正 */
+    div[data-testid="stCodeBlock"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D1D5DB !important;
+        border-radius: 8px !important;
+    }
+    div[data-testid="stCodeBlock"] code {
+        color: #000000 !important;
+        font-family: 'Courier New', Courier, monospace !important;
+    }
+    /* 下拉選單高對比度修正 */
+    div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        color: #1F2937 !important;
+        border-color: #D1D5DB !important;
+    }
+    div[data-baseweb="select"] span {
+        color: #1F2937 !important;
+    }
+    div[data-baseweb="menu"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E7EB !important;
+    }
+    div[data-baseweb="menu"] li {
+        color: #1F2937 !important; 
+        background-color: #FFFFFF !important;
+    }
+    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
+        background-color: #EEF2FF !important;
+        color: var(--primary-color) !important;
+    }
+    /* Radio Button 選項高對比度修正 */
+    div[role="radiogroup"] label {
+        background-color: #FFFFFF !important;
+        padding: 12px 16px !important;
+        border-radius: 8px !important;
+        border: 1px solid #E5E7EB !important;
+        color: #1F2937 !important;
+        margin-bottom: 8px !important;
+        transition: all 0.2s ease;
+    }
+    div[role="radiogroup"] label p {
+        color: #1F2937 !important;
+        font-weight: 500 !important;
+        font-size: 1rem !important;
+    }
+    div[role="radiogroup"] label:hover {
+        border-color: var(--primary-color) !important;
+        background-color: #EEF2FF !important;
+    }
+    div[role="radiogroup"] label:hover p {
+        color: var(--primary-color) !important;
+    }
+    /* 按鈕樣式 */
+    div.stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+        padding: 0.6rem 1.2rem;
+        background-color: var(--primary-color);
+        color: white !important;
+    }
+    div.stButton > button p {
+        color: white !important;
+    }
+    div.stButton > button:hover {
+        background-color: var(--primary-hover);
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        transform: translateY(-1px);
+    }
+    /* 送出按鈕特別強化 */
+    div[data-testid="stFormSubmitButton"] button {
+        background-color: #111827 !important;
+        color: white !important;
+        width: 100%;
+        border-radius: 8px;
+        padding: 0.75rem;
+    }
+    div[data-testid="stFormSubmitButton"] button:hover {
+        background-color: #000000 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    div[data-testid="stFormSubmitButton"] button p {
+        color: white !important;
+    }
+    .stProgress > div > div > div > div {
+        background-color: var(--primary-color);
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 核心邏輯函式
@@ -325,6 +309,7 @@ def get_growth_mindset_feedback(correct_count, total_q):
 def generate_questions(subject, grade, unit, assess_type_key):
     """
     呼叫 Gemini API 生成題目
+    [關鍵功能] 負向限制 (Negative Constraints) 與適性化教學 (DAP) 實作
     """
     if not API_KEY:
         st.error("未設定 API Key")
@@ -344,10 +329,12 @@ def generate_questions(subject, grade, unit, assess_type_key):
        - 單元：{unit}
        - 語言：繁體中文 (台灣用語)
     
-    2. **螺旋式課程限制 (Scope Check)**：
-       - 你必須嚴格遵守台灣教育部課綱的年級界線。
-       - **禁止超綱**：絕對不能出現 {next_grade} 年級或更高年級的概念。
-       - 題目敘述與詞彙必須符合 {grade} 年級的閱讀理解程度。
+    2. **嚴格的課程綱要對齊 (Strict Curriculum Alignment)**：
+       - **核心鐵律**：出題範圍必須嚴格限制在台灣教育部「十二年國民基本教育課程綱要」的 {grade} 年級學習內容。
+       - **絕對禁止超綱 (No Out-of-Level Content)**：
+         - **自然科學範例**：若是 3-4 年級，僅限於觀察與現象描述。**嚴禁**出現「電壓」、「電阻」、「化學式」、「原子」、「萬有引力公式」等國中或高年級概念。
+         - **數學範例**：若是 1-2 年級，**嚴禁**出現「分數」、「小數」、「除法」。若是 3-4 年級，**嚴禁**出現「代數符號(x,y)」、「負數」、「圓周率」。
+       - 請確保題目敘述與選項的詞彙難度符合 {grade} 年級學生的認知發展階段 (Piaget's Concrete Operational Stage)。
 
     3. **評量類型專屬策略 (CRITICAL)**：
        這是一份「{assess_info['label']}」。請務必遵守以下出題邏輯：
@@ -417,97 +404,131 @@ def generate_diagnosis(history_items, grade, subject, unit):
 # 頁面渲染函式
 # ==========================================
 
-def render_teacher_input_screen():
-    st.markdown("## 🎓 教育適性化評量系統 (教師端)")
-    st.caption("設定評量參數並產生學生連結")
+def render_teacher_dashboard():
+    """教師即時分析儀表板"""
+    st.markdown("## 📊 即時班級分析 (Teacher Dashboard)")
+    st.caption("輸入 Session ID 查看該次測驗的全班統計資料")
 
     with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
-                                   format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
-        with col2:
-            grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
+        session_id_input = st.text_input("請輸入測驗場次 ID (Session ID)", placeholder="例如：550e8400-e29b-...")
         
-        unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
-        
-        # 顯示評量類型的詳細說明，幫助教師選擇
-        assess_type = st.radio("評量類型", 
-                               options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
-                               format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
-        
-        st.markdown("---")
-        st.markdown("### 🔗 產生學生連結")
-        
-        with st.expander("❓ 如何讓學生使用？(必讀)"):
-            st.markdown("""
-            1. 此程式必須 **部署 (Deploy)** 到網路上 (如 Streamlit Cloud)。
-            2. 部署後，您會獲得一個網址 (例如 `https://your-app.streamlit.app`)。
-            3. 將該網址貼入下方欄位，即可產生專屬連結。
-            4. 若您使用 `localhost`，學生將**無法**連線。
-            """)
-
-        base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
-        
-        if st.button("產生連結", type="primary", use_container_width=True):
-            if not unit:
-                st.warning("請輸入單元名稱")
+        if st.button("🔍 查詢分析報告", type="primary", use_container_width=True):
+            if not session_id_input:
+                st.warning("請輸入 Session ID")
                 return
             
-            if not base_url_input:
-                st.error("⚠️ 請先填寫應用程式網址。如果您正在本機測試，可填入 http://localhost:8501")
-                return
+            records = get_class_stats(session_id_input)
+            
+            if not records:
+                st.info("⚠️ 查無資料，請確認 ID 是否正確，或目前尚無學生作答。")
+                st.markdown("---")
+                st.caption("*(以下為模擬展示畫面)*")
+                records = [
+                    {"student_name": "小明", "score": 80, "total": 5, "details": []},
+                    {"student_name": "小華", "score": 60, "total": 5, "details": []},
+                    {"student_name": "小美", "score": 100, "total": 5, "details": []},
+                ]
+            
+            df = pd.DataFrame(records)
+            avg_score = df['score'].mean()
+            pass_rate = len(df[df['score'] >= 60]) / len(df) * 100
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric("已交卷人數", f"{len(df)} 人")
+            col2.metric("平均分數", f"{avg_score:.1f} 分")
+            col3.metric("及格率", f"{pass_rate:.0f}%")
+            
+            st.subheader("📈 成績分佈")
+            st.bar_chart(df['score'])
+            
+            with st.expander("查看詳細名單"):
+                st.dataframe(df[['student_name', 'score']], use_container_width=True)
 
-            base_url = base_url_input.rstrip("/")
-            params = {
-                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type
-            }
-            query_string = urllib.parse.urlencode(params)
-            full_url = f"{base_url}/?{query_string}"
+            st.success("✅ 數據已更新 (Just-in-Time Teaching Ready)")
+
+def render_teacher_input_screen():
+    st.markdown("## 🎓 教育適性化評量系統 (教師端)")
+    
+    tab1, tab2 = st.tabs(["📝 出題與連結產生", "📊 班級分析儀表板"])
+    
+    with tab1:
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
+                                       format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
+            with col2:
+                grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
             
-            st.success("連結已產生！請複製下方連結給學生：")
-            st.code(full_url, language="text")
-            st.caption("請複製上方連結傳送給學生。")
+            unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
             
-        st.markdown("---")
-        st.markdown("### 🧪 教師試用")
-        if st.button("教師自己先試做 (不需產生連結)", use_container_width=True):
-            if not unit:
-                st.warning("請輸入單元名稱")
-            else:
-                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
-                start_quiz_generation()
+            assess_type = st.radio("評量類型", 
+                                   options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
+                                   format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
+            
+            st.markdown("---")
+            st.markdown("### 🔗 產生學生連結")
+            
+            base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="[https://....streamlit.app](https://....streamlit.app)")
+            
+            if st.button("產生連結", type="primary", use_container_width=True):
+                if not unit:
+                    st.warning("請輸入單元名稱")
+                elif not base_url_input:
+                    st.error("請輸入網址")
+                else:
+                    session_id = str(uuid.uuid4())
+                    base_url = base_url_input.rstrip("/")
+                    params = {
+                        "role": "student", "session": session_id,
+                        "subject": subject, "grade": grade, "unit": unit, "type": assess_type
+                    }
+                    query_string = urllib.parse.urlencode(params)
+                    full_url = f"{base_url}/?{query_string}"
+                    
+                    st.success("連結已產生！")
+                    st.info(f"🔑 **本場次 Session ID**: `{session_id}` (請記下此 ID 以便稍後查看分析報告)")
+                    st.code(full_url, language="text")
+                
+            st.markdown("---")
+            if st.button("教師自己先試做", use_container_width=True):
+                if not unit:
+                    st.warning("請輸入單元名稱")
+                else:
+                    st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
+                    start_quiz_generation()
+    
+    with tab2:
+        render_teacher_dashboard()
 
 def render_student_welcome_screen():
     st.markdown("## 👋 歡迎來到線上評量")
     
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
-    assess_label = ASSESSMENT_TYPES.get(cfg['assess_type'], {}).get('label', '測驗')
     
-    # 這裡可以選擇是否要告訴學生這是什麼評量，通常盲測不顯示詳細類型，只顯示「測驗」
     st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']}")
-    st.caption("本測驗將由 AI 老師為您即時生成題目，請放輕鬆作答。")
+    
+    student_name = st.text_input("請輸入您的姓名或座號", placeholder="例如：01 王小明")
     
     if st.button("🚀 開始測驗", type="primary", use_container_width=True):
-        start_quiz_generation()
+        if not student_name:
+            st.warning("請輸入姓名才能開始喔！")
+        else:
+            st.session_state.student_name = student_name
+            start_quiz_generation()
 
 def start_quiz_generation():
-    """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
     with st.spinner("正在準備試卷中..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
         if questions:
-            # 重置所有與題目相關的狀態
             st.session_state.questions = questions
             st.session_state.current_q_index = 0
             st.session_state.history = []
             st.session_state.generated_diagnosis = ""
-            
-            # 強制重置解析狀態
             st.session_state.show_explanation = False 
             st.session_state.user_answer = None 
-            
             st.session_state.app_state = 'quiz'
             st.rerun()
 
@@ -520,7 +541,6 @@ def render_quiz_screen():
         st.rerun()
         return
 
-    # 狀態防護
     if st.session_state.user_answer is None:
         st.session_state.show_explanation = False
 
@@ -539,7 +559,6 @@ def render_quiz_screen():
             "請選擇答案：", 
             current_q['options'], 
             index=st.session_state.user_answer,
-            # 移除 timestamp key，確保提交後可保持選取狀態
             key=f"radio_q{q_index}", 
             disabled=disable_interaction
         )
@@ -574,6 +593,16 @@ def render_quiz_screen():
                 st.session_state.user_answer = None
                 st.rerun()
             else:
+                if "session" in st.session_state.config:
+                    score = sum(1 for h in st.session_state.history if h['isCorrect']) * 20
+                    save_result_to_db(
+                        st.session_state.config["session"], 
+                        st.session_state.student_name,
+                        score, 
+                        total_q, 
+                        st.session_state.history
+                    )
+                
                 st.session_state.app_state = 'result'
                 st.rerun()
 
@@ -598,7 +627,6 @@ def render_result_screen():
 
     st.divider()
 
-    # 教師專用診斷 (Lazy Generation)
     incorrect_items = [h for h in history if not h['isCorrect']]
     if st.session_state.generated_diagnosis == "":
         if incorrect_items:
@@ -630,7 +658,6 @@ def render_result_screen():
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
-            # 回到首頁時，徹底清空所有狀態，防止殘留
             st.session_state.app_state = 'input'
             st.session_state.questions = []
             st.session_state.history = []
@@ -649,6 +676,7 @@ def main():
         if st.session_state.app_state == 'input':
             try:
                 st.session_state.config = {
+                    "session": st.query_params.get("session"),
                     "subject": st.query_params["subject"],
                     "grade": st.query_params["grade"],
                     "unit": st.query_params["unit"],
