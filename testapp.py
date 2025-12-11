@@ -449,6 +449,7 @@ def render_teacher_dashboard():
 def render_teacher_input_screen():
     st.markdown("## 🎓 教育適性化評量系統 (教師端)")
     
+    # [新增] Tab 分頁：出題與連結產生 | 班級分析儀表板
     tab1, tab2 = st.tabs(["📝 出題與連結產生", "📊 班級分析儀表板"])
     
     with tab1:
@@ -462,6 +463,7 @@ def render_teacher_input_screen():
             
             unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
             
+            # 顯示評量類型的詳細說明，幫助教師選擇
             assess_type = st.radio("評量類型", 
                                    options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
                                    format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
@@ -469,7 +471,15 @@ def render_teacher_input_screen():
             st.markdown("---")
             st.markdown("### 🔗 產生學生連結")
             
-            base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="[https://....streamlit.app](https://....streamlit.app)")
+            with st.expander("❓ 如何讓學生使用？(必讀)"):
+                st.markdown("""
+                1. 此程式必須 **部署 (Deploy)** 到網路上 (如 Streamlit Cloud)。
+                2. 部署後，您會獲得一個網址 (例如 `https://your-app.streamlit.app`)。
+                3. 將該網址貼入下方欄位，即可產生專屬連結。
+                4. 若您使用 `localhost`，學生將**無法**連線。
+                """)
+
+            base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
             
             if st.button("產生連結", type="primary", use_container_width=True):
                 if not unit:
@@ -477,7 +487,9 @@ def render_teacher_input_screen():
                 elif not base_url_input:
                     st.error("請輸入網址")
                 else:
+                    # [新增] 產生 Session ID
                     session_id = str(uuid.uuid4())
+                    
                     base_url = base_url_input.rstrip("/")
                     params = {
                         "role": "student", "session": session_id,
@@ -489,9 +501,11 @@ def render_teacher_input_screen():
                     st.success("連結已產生！")
                     st.info(f"🔑 **本場次 Session ID**: `{session_id}` (請記下此 ID 以便稍後查看分析報告)")
                     st.code(full_url, language="text")
+                    st.caption("請複製上方連結傳送給學生。")
                 
             st.markdown("---")
-            if st.button("教師自己先試做", use_container_width=True):
+            st.markdown("### 🧪 教師試用")
+            if st.button("教師自己先試做 (不需產生連結)", use_container_width=True):
                 if not unit:
                     st.warning("請輸入單元名稱")
                 else:
@@ -506,9 +520,13 @@ def render_student_welcome_screen():
     
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
+    assess_label = ASSESSMENT_TYPES.get(cfg['assess_type'], {}).get('label', '測驗')
     
+    # 這裡可以選擇是否要告訴學生這是什麼評量，通常盲測不顯示詳細類型，只顯示「測驗」
     st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']}")
+    st.caption("本測驗將由 AI 老師為您即時生成題目，請放輕鬆作答。")
     
+    # [新增] 學生姓名輸入
     student_name = st.text_input("請輸入您的姓名或座號", placeholder="例如：01 王小明")
     
     if st.button("🚀 開始測驗", type="primary", use_container_width=True):
@@ -519,16 +537,21 @@ def render_student_welcome_screen():
             start_quiz_generation()
 
 def start_quiz_generation():
+    """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
     with st.spinner("正在準備試卷中..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
         if questions:
+            # 重置所有與題目相關的狀態
             st.session_state.questions = questions
             st.session_state.current_q_index = 0
             st.session_state.history = []
             st.session_state.generated_diagnosis = ""
+            
+            # 強制重置解析狀態
             st.session_state.show_explanation = False 
             st.session_state.user_answer = None 
+            
             st.session_state.app_state = 'quiz'
             st.rerun()
 
@@ -541,6 +564,7 @@ def render_quiz_screen():
         st.rerun()
         return
 
+    # 狀態防護
     if st.session_state.user_answer is None:
         st.session_state.show_explanation = False
 
@@ -559,6 +583,7 @@ def render_quiz_screen():
             "請選擇答案：", 
             current_q['options'], 
             index=st.session_state.user_answer,
+            # 移除 timestamp key，確保提交後可保持選取狀態
             key=f"radio_q{q_index}", 
             disabled=disable_interaction
         )
@@ -593,8 +618,10 @@ def render_quiz_screen():
                 st.session_state.user_answer = None
                 st.rerun()
             else:
-                if "session" in st.session_state.config:
-                    score = sum(1 for h in st.session_state.history if h['isCorrect']) * 20
+                # 測驗結束，儲存成績
+                # [核心修正] 儲存到 Mock DB
+                if "session" in st.session_state.config: # 只有學生模式且有 session ID 才存
+                    score = sum(1 for h in st.session_state.history if h['isCorrect']) * 20 # 假設每題20分
                     save_result_to_db(
                         st.session_state.config["session"], 
                         st.session_state.student_name,
@@ -627,6 +654,7 @@ def render_result_screen():
 
     st.divider()
 
+    # 教師專用診斷 (Lazy Generation)
     incorrect_items = [h for h in history if not h['isCorrect']]
     if st.session_state.generated_diagnosis == "":
         if incorrect_items:
@@ -658,6 +686,7 @@ def render_result_screen():
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
+            # 回到首頁時，徹底清空所有狀態，防止殘留
             st.session_state.app_state = 'input'
             st.session_state.questions = []
             st.session_state.history = []
