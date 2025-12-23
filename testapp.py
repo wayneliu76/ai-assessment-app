@@ -4,6 +4,8 @@ import json
 import time
 import urllib.parse
 import random
+import uuid
+import pandas as pd
 
 # ==========================================
 # 系統設定與學術常數定義
@@ -26,7 +28,29 @@ except Exception as e:
     st.error(f"❌ 金鑰設定發生錯誤: {str(e)}")
     st.stop()
 
-# [核心修正] 根據 Wiliam & Leahy (2015) 區分短週期與中週期形成性評量
+# [新增] 模擬資料庫 (Mock Database) - 用於無 Firestore 環境下的展示
+if 'mock_db' not in st.session_state:
+    st.session_state.mock_db = {} # 結構: {session_id: [student_record_1, ...]}
+
+def save_result_to_db(session_id, student_name, score, total, history):
+    """將學生作答結果存入資料庫 (目前為模擬)"""
+    record = {
+        "student_name": student_name,
+        "score": score,
+        "total": total,
+        "timestamp": time.time(),
+        "details": history
+    }
+    if session_id not in st.session_state.mock_db:
+        st.session_state.mock_db[session_id] = []
+    st.session_state.mock_db[session_id].append(record)
+    return True
+
+def get_class_stats(session_id):
+    """讀取班級數據進行分析"""
+    return st.session_state.mock_db.get(session_id, [])
+
+# [評量類型定義] 包含詳細的出題策略與理論基礎
 ASSESSMENT_TYPES = {
     'placement': {
         'label': '安置性評量 (Placement)',
@@ -107,6 +131,8 @@ if 'generated_diagnosis' not in st.session_state:
     st.session_state.generated_diagnosis = ""
 if 'config' not in st.session_state:
     st.session_state.config = {}
+if 'student_name' not in st.session_state:
+    st.session_state.student_name = "Unknown"
 
 # [CSS 重構] 現代化 UI/UX 設計 - 高對比度與易讀性優化
 st.markdown("""
@@ -294,6 +320,7 @@ def generate_questions(subject, grade, unit, assess_type_key):
     next_grade = target_grade + 1
     assess_info = ASSESSMENT_TYPES[assess_type_key]
 
+    # [特別說明] 這裡的 Prompt 包含了您所強調的「內容效度」檢核機制與「數學符號」顯示規則
     prompt = f"""
     你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 5 題單選題：
 
@@ -317,7 +344,7 @@ def generate_questions(subject, grade, unit, assess_type_key):
     請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記。
     **JSON 格式規範**：
     1. 必須是合法的 JSON Array。
-    2. 若內容包含數學符號或 LaTeX (例如 frac)，**必須使用雙反斜線** 轉義 (例如：\\\\frac{{1}}{{2}})。
+    2. **數學符號規範 (CRITICAL)**：請**直接使用 Unicode 符號** (例如 +, -, ×, ÷, =, > , <)，**嚴禁**使用 LaTeX 語法 (如 \\times, \\div, \\frac)。這是一給國小學生看的，請保持格式簡單直觀。例如分數請用 "1/2" 表示。
     
     [
       {{
@@ -378,97 +405,135 @@ def generate_diagnosis(history_items, grade, subject, unit):
 # 頁面渲染函式
 # ==========================================
 
-def render_teacher_input_screen():
-    st.markdown("## 🎓 教育適性化評量系統 (教師端)")
-    st.caption("設定評量參數並產生學生連結")
+def render_teacher_dashboard():
+    """教師即時分析儀表板"""
+    st.markdown("## 📊 即時班級分析 (Teacher Dashboard)")
+    st.caption("輸入 Session ID 查看該次測驗的全班統計資料")
 
     with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
-                                   format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
-        with col2:
-            grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
+        session_id_input = st.text_input("請輸入測驗場次 ID (Session ID)", placeholder="例如：550e8400-e29b-...")
         
-        unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
-        
-        # 顯示評量類型的詳細說明，幫助教師選擇
-        assess_type = st.radio("評量類型", 
-                               options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
-                               format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
-        
-        st.markdown("---")
-        st.markdown("### 🔗 產生學生連結")
-        
-        with st.expander("❓ 如何讓學生使用？(必讀)"):
-            st.markdown("""
-            1. 此程式必須 **部署 (Deploy)** 到網路上 (如 Streamlit Cloud)。
-            2. 部署後，您會獲得一個網址 (例如 `https://your-app.streamlit.app`)。
-            3. 將該網址貼入下方欄位，即可產生專屬連結。
-            4. 若您使用 `localhost`，學生將**無法**連線。
-            """)
-
-        base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
-        
-        if st.button("產生連結", type="primary", use_container_width=True):
-            if not unit:
-                st.warning("請輸入單元名稱")
+        if st.button("🔍 查詢分析報告", type="primary", use_container_width=True):
+            if not session_id_input:
+                st.warning("請輸入 Session ID")
                 return
             
-            if not base_url_input:
-                st.error("⚠️ 請先填寫應用程式網址。如果您正在本機測試，可填入 http://localhost:8501")
-                return
+            records = get_class_stats(session_id_input)
+            
+            if not records:
+                st.info("⚠️ 查無資料，請確認 ID 是否正確，或目前尚無學生作答。")
+            
+            if records:
+                df = pd.DataFrame(records)
+                avg_score = df['score'].mean()
+                pass_rate = len(df[df['score'] >= 60]) / len(df) * 100
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("已交卷人數", f"{len(df)} 人")
+                col2.metric("平均分數", f"{avg_score:.1f} 分")
+                col3.metric("及格率", f"{pass_rate:.0f}%")
+                
+                st.subheader("📈 成績分佈")
+                st.bar_chart(df['score'])
+                
+                with st.expander("查看詳細名單"):
+                    st.dataframe(df[['student_name', 'score']], use_container_width=True)
 
-            base_url = base_url_input.rstrip("/")
-            params = {
-                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type
-            }
-            query_string = urllib.parse.urlencode(params)
-            full_url = f"{base_url}/?{query_string}"
+                st.success("✅ 數據已更新 (Just-in-Time Teaching Ready)")
+
+def render_teacher_input_screen():
+    st.markdown("## 🎓 教育適性化評量系統 (教師端)")
+    
+    tab1, tab2 = st.tabs(["📝 出題與連結產生", "📊 班級分析儀表板"])
+    
+    with tab1:
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
+                                       format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
+            with col2:
+                grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
             
-            st.success("連結已產生！請複製下方連結給學生：")
-            st.code(full_url, language="text")
-            st.caption("請複製上方連結傳送給學生。")
+            unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
             
-        st.markdown("---")
-        st.markdown("### 🧪 教師試用")
-        if st.button("教師自己先試做 (不需產生連結)", use_container_width=True):
-            if not unit:
-                st.warning("請輸入單元名稱")
-            else:
-                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
-                start_quiz_generation()
+            assess_type = st.radio("評量類型", 
+                                   options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
+                                   format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
+            
+            st.markdown("---")
+            st.markdown("### 🔗 產生學生連結")
+            
+            with st.expander("❓ 如何讓學生使用？(必讀)"):
+                st.markdown("""
+                1. 此程式必須 **部署 (Deploy)** 到網路上 (如 Streamlit Cloud)。
+                2. 部署後，您會獲得一個網址 (例如 `https://your-app.streamlit.app`)。
+                3. 將該網址貼入下方欄位，即可產生專屬連結。
+                4. 若您使用 `localhost`，學生將**無法**連線。
+                """)
+
+            base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
+            
+            if st.button("產生連結", type="primary", use_container_width=True):
+                if not unit:
+                    st.warning("請輸入單元名稱")
+                elif not base_url_input:
+                    st.error("請輸入網址")
+                else:
+                    session_id = str(uuid.uuid4())
+                    base_url = base_url_input.rstrip("/")
+                    params = {
+                        "role": "student", "session": session_id,
+                        "subject": subject, "grade": grade, "unit": unit, "type": assess_type
+                    }
+                    query_string = urllib.parse.urlencode(params)
+                    full_url = f"{base_url}/?{query_string}"
+                    
+                    st.success("連結已產生！")
+                    st.info(f"🔑 **本場次 Session ID**: `{session_id}` (請記下此 ID 以便稍後查看分析報告)")
+                    st.code(full_url, language="text")
+                    st.caption("請複製上方連結傳送給學生。")
+                
+            st.markdown("---")
+            st.markdown("### 🧪 教師試用")
+            if st.button("教師自己先試做", use_container_width=True):
+                if not unit:
+                    st.warning("請輸入單元名稱")
+                else:
+                    st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
+                    start_quiz_generation()
+    
+    with tab2:
+        render_teacher_dashboard()
 
 def render_student_welcome_screen():
     st.markdown("## 👋 歡迎來到線上評量")
     
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
-    assess_label = ASSESSMENT_TYPES.get(cfg['assess_type'], {}).get('label', '測驗')
     
-    # 這裡可以選擇是否要告訴學生這是什麼評量，通常盲測不顯示詳細類型，只顯示「測驗」
     st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']}")
-    st.caption("本測驗將由 AI 老師為您即時生成題目，請放輕鬆作答。")
+    
+    student_name = st.text_input("請輸入您的姓名或座號", placeholder="例如：01 王小明")
     
     if st.button("🚀 開始測驗", type="primary", use_container_width=True):
-        start_quiz_generation()
+        if not student_name:
+            st.warning("請輸入姓名才能開始喔！")
+        else:
+            st.session_state.student_name = student_name
+            start_quiz_generation()
 
 def start_quiz_generation():
-    """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
     with st.spinner("正在準備試卷中..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
         if questions:
-            # 重置所有與題目相關的狀態
             st.session_state.questions = questions
             st.session_state.current_q_index = 0
             st.session_state.history = []
             st.session_state.generated_diagnosis = ""
-            
-            # 強制重置解析狀態
             st.session_state.show_explanation = False 
             st.session_state.user_answer = None 
-            
             st.session_state.app_state = 'quiz'
             st.rerun()
 
@@ -481,7 +546,6 @@ def render_quiz_screen():
         st.rerun()
         return
 
-    # 狀態防護
     if st.session_state.user_answer is None:
         st.session_state.show_explanation = False
 
@@ -500,7 +564,6 @@ def render_quiz_screen():
             "請選擇答案：", 
             current_q['options'], 
             index=st.session_state.user_answer,
-            # 移除 timestamp key，確保提交後可保持選取狀態
             key=f"radio_q{q_index}", 
             disabled=disable_interaction
         )
@@ -535,6 +598,16 @@ def render_quiz_screen():
                 st.session_state.user_answer = None
                 st.rerun()
             else:
+                if "session" in st.session_state.config:
+                    score = sum(1 for h in st.session_state.history if h['isCorrect']) * 20
+                    save_result_to_db(
+                        st.session_state.config["session"], 
+                        st.session_state.student_name,
+                        score, 
+                        total_q, 
+                        st.session_state.history
+                    )
+                
                 st.session_state.app_state = 'result'
                 st.rerun()
 
@@ -559,7 +632,6 @@ def render_result_screen():
 
     st.divider()
 
-    # 教師專用診斷 (Lazy Generation)
     incorrect_items = [h for h in history if not h['isCorrect']]
     if st.session_state.generated_diagnosis == "":
         if incorrect_items:
@@ -591,7 +663,6 @@ def render_result_screen():
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
-            # 回到首頁時，徹底清空所有狀態，防止殘留
             st.session_state.app_state = 'input'
             st.session_state.questions = []
             st.session_state.history = []
@@ -610,6 +681,7 @@ def main():
         if st.session_state.app_state == 'input':
             try:
                 st.session_state.config = {
+                    "session": st.query_params.get("session"),
                     "subject": st.query_params["subject"],
                     "grade": st.query_params["grade"],
                     "unit": st.query_params["unit"],
