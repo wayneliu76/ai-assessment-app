@@ -26,7 +26,7 @@ except Exception as e:
     st.error(f"❌ 金鑰設定發生錯誤: {str(e)}")
     st.stop()
 
-# [評量類型定義] 包含詳細的出題策略與理論基礎
+# [核心修正] 根據 Wiliam & Leahy (2015) 區分短週期與中週期形成性評量
 ASSESSMENT_TYPES = {
     'placement': {
         'label': '安置性評量 (Placement)',
@@ -379,8 +379,8 @@ def generate_diagnosis(history_items, grade, subject, unit):
 # ==========================================
 
 def render_teacher_input_screen():
-    st.markdown("## 🎓 教育適性化評量系統")
-    st.caption("基於 IRT 與 Bloom's Taxonomy 的智能出題引擎")
+    st.markdown("## 🎓 教育適性化評量系統 (教師端)")
+    st.caption("設定評量參數並產生學生連結")
 
     with st.container(border=True):
         col1, col2 = st.columns(2)
