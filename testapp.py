@@ -338,7 +338,7 @@ def generate_questions(subject, grade, unit, assess_type_key):
     """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash-preview-09-2025")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
         
         text = response.text.strip()
@@ -376,7 +376,7 @@ def generate_diagnosis(history_items, grade, subject, unit):
     2. 教學建議：(一句話提供具體解法)
     """
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash-preview-09-2025")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         return model.generate_content(prompt).text
     except:
         return "無法生成診斷報告。"
