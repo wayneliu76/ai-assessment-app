@@ -193,7 +193,7 @@ st.markdown("""
     }
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
-        background-color: #FFFFFF !important;
+        background-color: #000000 !important;
         padding: 12px 16px !important;
         border-radius: 8px !important;
         border: 1px solid #E5E7EB !important;
@@ -212,6 +212,11 @@ st.markdown("""
     }
     div[role="radiogroup"] label:hover p {
         color: var(--primary-color) !important;
+    }
+    /* 數字輸入框高對比度修正 */
+    div[data-baseweb="input"] input[type="number"] {
+        color: #000000 !important;
+        font-weight: 500 !important;
     }
     /* 按鈕樣式 */
     div.stButton > button {
@@ -286,9 +291,10 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
-def generate_questions(subject, grade, unit, assess_type_key):
+def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     """
     呼叫 Gemini API 生成題目
+    [新增] num_questions 參數動態設定出題數量
     [關鍵功能] 負向限制 (Negative Constraints) 與適性化教學 (DAP) 實作
     """
     if not API_KEY:
@@ -297,12 +303,11 @@ def generate_questions(subject, grade, unit, assess_type_key):
 
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
     target_grade = int(grade)
-    next_grade = target_grade + 1
     assess_info = ASSESSMENT_TYPES[assess_type_key]
 
     # [特別說明] 這裡的 Prompt 包含了您所強調的「內容效度」檢核機制與「數學符號」顯示規則
     prompt = f"""
-    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 5 題單選題：
+    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 {num_questions} 題單選題：
 
     1. **基本資訊**：
        - 對象：國小 {grade} 年級學生
@@ -390,13 +395,16 @@ def render_teacher_input_screen():
     st.caption("設定評量參數並產生學生連結")
 
     with st.container(border=True):
-        col1, col2 = st.columns(2)
+        # [修改] 增加第三個欄位，用於設定題目數量
+        col1, col2, col3 = st.columns([2, 2, 1.5])
         with col1:
             subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
                                    format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
         with col2:
             grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
-        
+        with col3:
+            num_questions = st.number_input("題目數量", min_value=1, max_value=10, value=5, step=1, help="建議適度設定題數以免學生認知負荷過高。")
+            
         unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
         
         # 顯示評量類型的詳細說明，幫助教師選擇
@@ -427,8 +435,9 @@ def render_teacher_input_screen():
                 return
 
             base_url = base_url_input.rstrip("/")
+            # [修改] 將設定的題目數量 (num_q) 加入 URL 參數
             params = {
-                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type
+                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type, "num_q": num_questions
             }
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
@@ -443,7 +452,8 @@ def render_teacher_input_screen():
             if not unit:
                 st.warning("請輸入單元名稱")
             else:
-                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
+                # [修改] 將題數存入 session state config
+                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type, 'num_questions': num_questions}
                 start_quiz_generation()
 
 def render_student_welcome_screen():
@@ -451,8 +461,10 @@ def render_student_welcome_screen():
     
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
+    num_q = cfg.get('num_questions', 5) # 容錯處理：預設為5題
     
-    st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']}")
+    # [修改] 顯示即將面對的總題數，降低未知焦慮
+    st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']} (共 {num_q} 題)")
     st.caption("本測驗將由 AI 老師為您即時生成題目，請放輕鬆作答。")
     
     # [新增] 學生姓名輸入
@@ -468,8 +480,11 @@ def render_student_welcome_screen():
 def start_quiz_generation():
     """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
-    with st.spinner("正在準備試卷中..."):
-        questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
+    num_q = cfg.get('num_questions', 5) # 容錯處理
+    
+    with st.spinner(f"正在為您量身準備 {num_q} 道題目中..."):
+        # [修改] 將題數傳遞給生成函式
+        questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'], num_q)
         if questions:
             # 重置所有與題目相關的狀態
             st.session_state.questions = questions
@@ -626,11 +641,13 @@ def main():
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
             try:
+                # [修改] 捕獲 num_q 參數，若無則預設為 5
                 st.session_state.config = {
                     "subject": st.query_params["subject"],
                     "grade": st.query_params["grade"],
                     "unit": st.query_params["unit"],
-                    "assess_type": st.query_params["type"]
+                    "assess_type": st.query_params["type"],
+                    "num_questions": int(st.query_params.get("num_q", 5))
                 }
                 st.session_state.app_state = 'student_ready'
             except Exception:
