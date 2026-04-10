@@ -5,6 +5,7 @@ import time
 import urllib.parse
 import random
 import uuid
+import re
 
 # ==========================================
 # 系統設定與學術常數定義
@@ -170,41 +171,27 @@ st.markdown("""
         color: #000000 !important;
         font-family: 'Courier New', Courier, monospace !important;
     }
-    
-    /* ========================================= */
-    /* 下拉選單高對比度修正 (符合 WCAG 2.1 規範)   */
-    /* ========================================= */
+    /* 下拉選單高對比度修正 */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
+        color: #1F2937 !important;
         border-color: #D1D5DB !important;
     }
-    div[data-baseweb="select"] * {
-        color: #1F2937 !important; 
-    }
-    div[data-baseweb="popover"] div[data-baseweb="menu"],
-    ul[data-testid="stSelectboxVirtualDropdown"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E5E7EB !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-    }
-    div[data-baseweb="menu"] li {
-        background-color: #FFFFFF !important;
-    }
-    div[data-baseweb="menu"] li * {
+    div[data-baseweb="select"] span {
         color: #1F2937 !important;
     }
-    div[data-baseweb="menu"] li:hover, 
-    div[data-baseweb="menu"] li[aria-selected="true"],
-    div[data-baseweb="menu"] li[aria-highlighted="true"] {
-        background-color: var(--primary-color) !important; 
+    div[data-baseweb="menu"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E5E7EB !important;
     }
-    div[data-baseweb="menu"] li:hover *, 
-    div[data-baseweb="menu"] li[aria-selected="true"] *,
-    div[data-baseweb="menu"] li[aria-highlighted="true"] * {
-        color: #FFFFFF !important; 
+    div[data-baseweb="menu"] li {
+        color: #1F2937 !important; 
+        background-color: #FFFFFF !important;
     }
-    /* ========================================= */
-    
+    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
+        background-color: #EEF2FF !important;
+        color: var(--primary-color) !important;
+    }
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
         background-color: #FFFFFF !important;
@@ -226,11 +213,6 @@ st.markdown("""
     }
     div[role="radiogroup"] label:hover p {
         color: var(--primary-color) !important;
-    }
-    /* 數字輸入框高對比度修正 */
-    div[data-baseweb="input"] input[type="number"] {
-        color: #000000 !important;
-        font-weight: 500 !important;
     }
     /* 按鈕樣式 */
     div.stButton > button {
@@ -305,6 +287,7 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
+# [核心修復 1] 保留唯一乾淨且具有快取防護的出題函式，徹底刪除所有冗餘代碼
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
     """真正執行 API 呼叫的內部函式 (具備快取能力)"""
@@ -345,7 +328,7 @@ def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
     """
 
     max_retries = 3
-    base_delay = 5 
+    base_delay = 15 # 提高基礎等待秒數，避免太快撞擊伺服器
     
     for attempt in range(max_retries):
         try:
@@ -366,7 +349,19 @@ def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
             error_msg = str(e).lower()
             if "429" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    # [核心修復 2: 動態解析伺服器懲罰時間]
+                    # 強制讀取 Google 伺服器傳回的 "retry in XX.Xs" 訊息
+                    match = re.search(r'retry in (\d+\.?\d*)s', error_msg)
+                    if match:
+                        # 擷取 Google 要求的精確冷卻時間，並加上 2 秒的網路延遲保險
+                        server_demanded_wait = float(match.group(1))
+                        delay = server_demanded_wait + 2.0
+                        st.toast(f"⚠️ 觸發伺服器流量管制，將精準等待 {delay:.1f} 秒後自動重試...")
+                    else:
+                        # 預備退避策略
+                        delay = base_delay * (2 ** attempt) + random.uniform(1, 3)
+                        st.toast(f"⚠️ 流量擁塞，將等待 {delay:.1f} 秒後自動重試...")
+                    
                     time.sleep(delay)
                     continue
                 else:
@@ -385,12 +380,11 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
         return []
 
     try:
-        # 呼叫具有快取機制的函式
         return _cached_api_call(subject, grade, unit, assess_type_key, num_questions)
     except Exception as e:
         error_msg = str(e)
         if "API Limit Reached" in error_msg:
-            st.error("❌ 系統達到 API 每分鐘呼叫上限。因您連續測試過於頻繁，請等待 1 分鐘後再試。")
+            st.error("❌ 系統達到 API 每分鐘呼叫上限。由於 Google 的安全鎖定機制，請您停止點擊，等待完整的 60 秒後再重試。")
         else:
             st.error(error_msg)
         return []
@@ -480,18 +474,15 @@ def render_teacher_input_screen():
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
             
-            # [科學解法 1：主動快取預熱 (Active Cache Pre-warming)]
-            # 老師產生條碼的當下，背景立刻打一次 Google API 拿題目，並寫入全域記憶體！
-            # 這樣就算 30 個學生下一秒同時掃描 QR code，他們也只會讀記憶體，呼叫次數 = 0！
-            with st.spinner("⏳ 正在為全班預先生成題目並建立高速快取（約需 5-10 秒），確保學生連線順暢..."):
+            with st.spinner("⏳ 正在為全班預先生成題目並建立高速快取（這需要呼叫 AI，請耐心等待）..."):
                 try:
                     _cached_api_call(subject, grade, unit, assess_type, num_questions)
                 except Exception as e:
                     if "Limit Reached" in str(e):
-                        st.error("❌ 系統達到 API 每分鐘呼叫上限。因為您剛才測試頻繁，請等待整整 1 分鐘後再點擊產生條碼。")
+                        st.error("❌ 系統達到 API 每分鐘呼叫上限。由於 Google 的安全鎖定機制，請停止所有操作，去喝杯水等待『完整的 60 秒』後再點擊產生。")
                     else:
                         st.error(f"⚠️ 預先生成題目失敗，請稍後再試：{str(e)}")
-                    return # 生成失敗就不印出條碼，以免學生白掃
+                    return 
             
             encoded_url = urllib.parse.quote(full_url)
             _api_host = "api.qrserver.com"
@@ -693,15 +684,12 @@ def main():
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
             try:
-                # [科學解法 2：嚴格型別對齊 (Strict Type Casting)]
-                # 從 URL 拿出來的一定是 "字串"。我們必須強制轉回 int，
-                # 這樣雜湊出來的 Cache Key 才會跟老師建立的一模一樣，快取才會命中！
                 st.session_state.config = {
                     "subject": st.query_params["subject"],
-                    "grade": int(st.query_params["grade"]),  # 絕對關鍵：必須轉型為 int
+                    "grade": int(st.query_params["grade"]),  
                     "unit": st.query_params["unit"],
                     "assess_type": st.query_params["type"],
-                    "num_questions": int(st.query_params.get("num_q", 5)) # 絕對關鍵：必須轉型為 int
+                    "num_questions": int(st.query_params.get("num_q", 5)) 
                 }
                 st.session_state.app_state = 'student_ready'
             except Exception:
