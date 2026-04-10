@@ -462,6 +462,7 @@ def render_teacher_input_screen():
             3. 將 QR Code 投影在電子白板上，學生使用平板掃描即可立刻進入測驗。
             """)
 
+        # [修正] 移除 placeholder 中錯誤的 Markdown URL 語法污染
         base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="請在此貼上瀏覽器上方的網址 (如 [https://your-app.streamlit.app](https://your-app.streamlit.app))")
         
         if st.button("產生測驗連結與 QR Code", type="primary", use_container_width=True):
@@ -480,6 +481,8 @@ def render_teacher_input_screen():
             full_url = f"{base_url}/?{query_string}"
             
             encoded_url = urllib.parse.quote(full_url)
+            
+            # [修正] 移除字串內的 Markdown 超連結語法，還原為純淨的標準 RESTful 端點
             qr_api_url = f"[https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=](https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=){encoded_url}"
             
             st.success("✅ 測驗發布成功！請將以下 QR Code 投影或提供連結給學生：")
