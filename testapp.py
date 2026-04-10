@@ -333,10 +333,10 @@ def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
     
     for attempt in range(max_retries):
         try:
-            # [科學解法 2：降維打擊避開物理瓶頸] 
-            # 將 2.5-flash (5 RPM限制) 切換為 1.5-flash (15 RPM限制)
-            # 這從物理層面上讓您的系統每分鐘能承受 3 倍的請求量！
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # [核心修正：沙盒環境白名單對齊] 
+            # 由於目前的預覽沙盒環境僅開放 gemini-2.5-flash，因此我們必須強制使用此模型。
+            # 這意味著您需注意每分鐘 5 次的流量上限，但有了下方的嚴格快取機制，只要產生一次即可避開限制。
+            model = genai.GenerativeModel("gemini-2.5-flash")
             response = model.generate_content(prompt)
             
             text = response.text.strip()
@@ -393,7 +393,7 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     except Exception as e:
         error_msg = str(e)
         if "API Limit Reached" in error_msg:
-            st.error("❌ 系統達到 API 每分鐘呼叫上限。由於 Google 的安全鎖定機制，請您停止點擊，等待完整的 60 秒後再重試。")
+            st.error("❌ 系統達到 API 每分鐘呼叫上限。由於預覽環境的安全鎖定機制，請您停止點擊，等待完整的 60 秒後再重試。")
         else:
             st.error(error_msg)
         return []
@@ -421,8 +421,8 @@ def generate_diagnosis(history_items, grade, subject, unit):
     """
     
     try:
-        # 診斷模型同步切換為容量更大的 1.5-flash
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # 診斷模型同樣需對齊沙盒白名單
+        model = genai.GenerativeModel("gemini-2.5-flash")
         return model.generate_content(prompt).text
     except Exception as e:
         if "429" in str(e):
