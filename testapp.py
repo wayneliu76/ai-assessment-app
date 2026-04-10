@@ -305,8 +305,6 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
-# [核心修復] 導入全域快取 (Cache Data)，TTL設定為1小時 (3600秒)
-# 這樣一來，只要是「同樣的科目、年級、單元、評量類型、題數」，系統就會直接從記憶體拿題目，不會消耗 API 額度！
 @st.cache_data(ttl=3600, show_spinner=False)
 def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
     """真正執行 API 呼叫的內部函式 (具備快取能力)"""
@@ -372,7 +370,6 @@ def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
                     time.sleep(delay)
                     continue
                 else:
-                    # 如果重試還是失敗，必須拋出例外，這樣 Streamlit 才「不會」把失敗的結果存入快取
                     raise Exception("API Limit Reached")
             else:
                 raise Exception(f"題目生成失敗: {e}")
@@ -462,7 +459,6 @@ def render_teacher_input_screen():
             3. 將 QR Code 投影在電子白板上，學生使用平板掃描即可立刻進入測驗。
             """)
 
-        # [科學解法]：宣告變數解構，徹底迴避介面端的 Markdown Auto-Linker 污染
         _scheme = "https"
         _domain_placeholder = "your-app.streamlit.app"
         placeholder_text = f"請在此貼上瀏覽器上方的網址 (如 {_scheme}://{_domain_placeholder})"
@@ -484,19 +480,29 @@ def render_teacher_input_screen():
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
             
-            encoded_url = urllib.parse.quote(full_url)
+            # [科學解法 1：主動快取預熱 (Active Cache Pre-warming)]
+            # 老師產生條碼的當下，背景立刻打一次 Google API 拿題目，並寫入全域記憶體！
+            # 這樣就算 30 個學生下一秒同時掃描 QR code，他們也只會讀記憶體，呼叫次數 = 0！
+            with st.spinner("⏳ 正在為全班預先生成題目並建立高速快取（約需 5-10 秒），確保學生連線順暢..."):
+                try:
+                    _cached_api_call(subject, grade, unit, assess_type, num_questions)
+                except Exception as e:
+                    if "Limit Reached" in str(e):
+                        st.error("❌ 系統達到 API 每分鐘呼叫上限。因為您剛才測試頻繁，請等待整整 1 分鐘後再點擊產生條碼。")
+                    else:
+                        st.error(f"⚠️ 預先生成題目失敗，請稍後再試：{str(e)}")
+                    return # 生成失敗就不印出條碼，以免學生白掃
             
-            # [科學解法]：透過分離常數字串動態組裝 API 位址，這是 100% 絕對乾淨的字串
+            encoded_url = urllib.parse.quote(full_url)
             _api_host = "api.qrserver.com"
             _api_path = "v1/create-qr-code"
             qr_api_url = f"{_scheme}://{_api_host}/{_api_path}/?size=250x250&data={encoded_url}"
             
-            st.success("✅ 測驗發布成功！請將以下 QR Code 投影或提供連結給學生：")
+            st.success("✅ 測驗發布成功且快取已建立！請將以下 QR Code 投影給學生：")
             
             disp_col1, disp_col2 = st.columns([1, 2])
             with disp_col1:
                 st.markdown("**📱 學生行動裝置掃描區**")
-                # 這時的 qr_api_url 必定是一個純淨的 URL，不會觸發 ValueError
                 st.image(qr_api_url, use_column_width=True)
             
             with disp_col2:
@@ -537,7 +543,6 @@ def start_quiz_generation():
     cfg = st.session_state.config
     num_q = cfg.get('num_questions', 5) 
     
-    # 提示文字更新，告知若是相同的單元會直接從快取載入
     with st.spinner(f"正在為您量身準備 {num_q} 道題目中 (若為相同單元將由快取秒速載入)..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'], num_q)
         if questions:
@@ -688,12 +693,15 @@ def main():
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
             try:
+                # [科學解法 2：嚴格型別對齊 (Strict Type Casting)]
+                # 從 URL 拿出來的一定是 "字串"。我們必須強制轉回 int，
+                # 這樣雜湊出來的 Cache Key 才會跟老師建立的一模一樣，快取才會命中！
                 st.session_state.config = {
                     "subject": st.query_params["subject"],
-                    "grade": st.query_params["grade"],
+                    "grade": int(st.query_params["grade"]),  # 絕對關鍵：必須轉型為 int
                     "unit": st.query_params["unit"],
                     "assess_type": st.query_params["type"],
-                    "num_questions": int(st.query_params.get("num_q", 5))
+                    "num_questions": int(st.query_params.get("num_q", 5)) # 絕對關鍵：必須轉型為 int
                 }
                 st.session_state.app_state = 'student_ready'
             except Exception:
