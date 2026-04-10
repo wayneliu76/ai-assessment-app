@@ -462,8 +462,11 @@ def render_teacher_input_screen():
             3. 將 QR Code 投影在電子白板上，學生使用平板掃描即可立刻進入測驗。
             """)
 
-        # [極端防禦手段]：透過字串拼接，防止 Chat UI 的 Markdown Auto-Linker 攔截並污染字串常值
-        placeholder_text = "請在此貼上瀏覽器上方的網址 (如 " + "https://" + "your-app.streamlit.app)"
+        # [科學解法]：宣告變數解構，徹底迴避介面端的 Markdown Auto-Linker 污染
+        _scheme = "https"
+        _domain_placeholder = "your-app.streamlit.app"
+        placeholder_text = f"請在此貼上瀏覽器上方的網址 (如 {_scheme}://{_domain_placeholder})"
+        
         base_url_input = st.text_input("請貼上您的應用程式網址", placeholder=placeholder_text)
         
         if st.button("產生測驗連結與 QR Code", type="primary", use_container_width=True):
@@ -483,17 +486,17 @@ def render_teacher_input_screen():
             
             encoded_url = urllib.parse.quote(full_url)
             
-            # [極端防禦手段]：將 API 端點 URL 拆解並拼接，徹底避開正則表達式的解析！
-            # 原本完整的 URL 會被 UI 變成 [https://api...](https://api...)，導致 Streamlit I/O 錯誤
-            qr_base_domain = "https://" + "[api.qrserver.com/v1/create-qr-code/?size=250x250&data=](https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=)"
-            qr_api_url = f"{qr_base_domain}{encoded_url}"
+            # [科學解法]：透過分離常數字串動態組裝 API 位址，這是 100% 絕對乾淨的字串
+            _api_host = "api.qrserver.com"
+            _api_path = "v1/create-qr-code"
+            qr_api_url = f"{_scheme}://{_api_host}/{_api_path}/?size=250x250&data={encoded_url}"
             
             st.success("✅ 測驗發布成功！請將以下 QR Code 投影或提供連結給學生：")
             
             disp_col1, disp_col2 = st.columns([1, 2])
             with disp_col1:
                 st.markdown("**📱 學生行動裝置掃描區**")
-                # 這邊傳入的是 100% 乾淨的字串，保證 st.image 能夠正常發起 GET 請求
+                # 這時的 qr_api_url 必定是一個純淨的 URL，不會觸發 ValueError
                 st.image(qr_api_url, use_column_width=True)
             
             with disp_col2:
