@@ -170,30 +170,44 @@ st.markdown("""
         color: #000000 !important;
         font-family: 'Courier New', Courier, monospace !important;
     }
-    /* 下拉選單高對比度修正 */
+    
+    /* ========================================= */
+    /* 下拉選單高對比度修正 (符合 WCAG 2.1 規範)   */
+    /* ========================================= */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
-        color: #1F2937 !important;
         border-color: #D1D5DB !important;
     }
-    div[data-baseweb="select"] span {
-        color: #1F2937 !important;
+    div[data-baseweb="select"] * {
+        color: #1F2937 !important; 
     }
-    div[data-baseweb="menu"] {
+    div[data-baseweb="popover"] div[data-baseweb="menu"],
+    ul[data-testid="stSelectboxVirtualDropdown"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E5E7EB !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
     }
     div[data-baseweb="menu"] li {
-        color: #1F2937 !important; 
         background-color: #FFFFFF !important;
     }
-    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #EEF2FF !important;
-        color: var(--primary-color) !important;
+    div[data-baseweb="menu"] li * {
+        color: #1F2937 !important;
     }
+    div[data-baseweb="menu"] li:hover, 
+    div[data-baseweb="menu"] li[aria-selected="true"],
+    div[data-baseweb="menu"] li[aria-highlighted="true"] {
+        background-color: var(--primary-color) !important; 
+    }
+    div[data-baseweb="menu"] li:hover *, 
+    div[data-baseweb="menu"] li[aria-selected="true"] *,
+    div[data-baseweb="menu"] li[aria-highlighted="true"] * {
+        color: #FFFFFF !important; 
+    }
+    /* ========================================= */
+    
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
-        background-color: #000000 !important;
+        background-color: #FFFFFF !important;
         padding: 12px 16px !important;
         border-radius: 8px !important;
         border: 1px solid #E5E7EB !important;
@@ -293,9 +307,7 @@ def get_growth_mindset_feedback(correct_count, total_q):
 
 def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     """
-    呼叫 Gemini API 生成題目
-    [新增] num_questions 參數動態設定出題數量
-    [關鍵功能] 負向限制 (Negative Constraints) 與適性化教學 (DAP) 實作
+    呼叫 Gemini API 生成題目 (加入 Exponential Backoff 演算法處理 429 Rate Limit)
     """
     if not API_KEY:
         st.error("未設定 API Key")
@@ -305,7 +317,6 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     target_grade = int(grade)
     assess_info = ASSESSMENT_TYPES[assess_type_key]
 
-    # [特別說明] 這裡的 Prompt 包含了您所強調的「內容效度」檢核機制與「數學符號」顯示規則
     prompt = f"""
     你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 {num_questions} 題單選題：
 
@@ -315,21 +326,18 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
        - 單元：{unit}
        - 語言：繁體中文 (台灣用語)
     
-    2. **嚴格的課程綱要對齊 (Strict Curriculum Alignment)**：
+    2. **嚴格的課程綱要對齊**：
        - **核心鐵律**：出題範圍必須嚴格限制在台灣教育部「十二年國民基本教育課程綱要」的 {grade} 年級學習內容。
-       - **絕對禁止超綱 (No Out-of-Level Content)**：
-         - **自然科學範例**：若是 3-4 年級，僅限於觀察與現象描述。**嚴禁**出現「電壓」、「電阻」、「化學式」、「原子」、「萬有引力公式」等國中或高年級概念。
-         - **數學範例**：若是 1-2 年級，**嚴禁**出現「分數」、「小數」、「除法」。若是 3-4 年級，**嚴禁**出現「代數符號(x,y)」、「負數」、「圓周率」。
-       - 請確保題目敘述與選項的詞彙難度符合 {grade} 年級學生的認知發展階段 (Piaget's Concrete Operational Stage)。
+       - 請確保題目敘述與選項的詞彙難度符合該年級認知發展階段。
 
-    3. **評量類型專屬策略 (CRITICAL)**：
+    3. **評量類型專屬策略**：
        這是一份「{assess_info['label']}」。請務必遵守以下出題邏輯：
        {assess_info['prompt_instruction']}
 
     請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記。
     **JSON 格式規範**：
     1. 必須是合法的 JSON Array。
-    2. **數學符號規範 (CRITICAL)**：請**直接使用 Unicode 符號** (例如 +, -, ×, ÷, =, > , <)，**嚴禁**使用 LaTeX 語法 (如 \\times, \\div, \\frac)。這是一給國小學生看的，請保持格式簡單直觀。例如分數請用 "1/2" 表示。
+    2. 數學符號請直接使用 Unicode 符號 (例如 +, -, ×, ÷, =)，嚴禁使用 LaTeX。
     
     [
       {{
@@ -342,22 +350,42 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     ]
     """
 
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        
-        text = response.text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        elif text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        
-        return json.loads(text)
-    except Exception as e:
-        st.error(f"題目生成失敗: {e}")
-        return []
+    # [關鍵修復] 指數退避演算法 (Exponential Backoff) 處理 429 錯誤
+    max_retries = 3
+    base_delay = 5 # 起始等待秒數
+    
+    for attempt in range(max_retries):
+        try:
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            elif text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            
+            return json.loads(text)
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            # 判斷是否為 Rate Limit (429) 或 Quota 錯誤
+            if "429" in error_msg or "quota" in error_msg:
+                if attempt < max_retries - 1:
+                    # 加入 Jitter (抖動) 避免同時重試造成二次擁塞
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    st.toast(f"⚠️ API 流量限制 (429)。系統將在 {delay:.1f} 秒後自動重試 (第 {attempt + 1}/{max_retries - 1} 次)...")
+                    time.sleep(delay)
+                    continue
+                else:
+                    st.error("❌ 系統達到 API 每分鐘呼叫上限。請等待 1 分鐘後再試。")
+                    return []
+            else:
+                # 其他非流量限制的錯誤直接拋出
+                st.error(f"題目生成失敗: {e}")
+                return []
 
 def generate_diagnosis(history_items, grade, subject, unit):
     """生成教師專用的簡短診斷"""
@@ -380,10 +408,14 @@ def generate_diagnosis(history_items, grade, subject, unit):
     1. 核心迷思：(一句話點出最關鍵的錯誤觀念)
     2. 教學建議：(一句話提供具體解法)
     """
+    
+    # 針對診斷也加入簡單防護
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         return model.generate_content(prompt).text
-    except:
+    except Exception as e:
+        if "429" in str(e):
+            return "⚠️ 因 API 呼叫頻率過高，暫時無法生成診斷報告。請稍後再看。"
         return "無法生成診斷報告。"
 
 # ==========================================
@@ -395,7 +427,6 @@ def render_teacher_input_screen():
     st.caption("設定評量參數並產生學生連結")
 
     with st.container(border=True):
-        # [修改] 增加第三個欄位，用於設定題目數量
         col1, col2, col3 = st.columns([2, 2, 1.5])
         with col1:
             subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
@@ -403,11 +434,11 @@ def render_teacher_input_screen():
         with col2:
             grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
         with col3:
+            # 教師設定題目數量的輸入框 (確保在此畫面可見)
             num_questions = st.number_input("題目數量", min_value=1, max_value=10, value=5, step=1, help="建議適度設定題數以免學生認知負荷過高。")
             
         unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
         
-        # 顯示評量類型的詳細說明，幫助教師選擇
         assess_type = st.radio("評量類型", 
                                options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
                                format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
@@ -417,25 +448,21 @@ def render_teacher_input_screen():
         
         with st.expander("❓ 如何讓學生使用？(必讀)"):
             st.markdown("""
-            1. 此程式必須 **部署 (Deploy)** 到網路上 (如 Streamlit Cloud)。
-            2. 部署後，您會獲得一個網址 (例如 `https://your-app.streamlit.app`)。
-            3. 將該網址貼入下方欄位，即可產生專屬連結。
-            4. 若您使用 `localhost`，學生將**無法**連線。
+            1. 此程式必須 **部署 (Deploy)** 到網路上。
+            2. 將網址貼入下方欄位，即可產生專屬連結。
             """)
 
-        base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
+        base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="請在此貼上瀏覽器上方的網址")
         
         if st.button("產生連結", type="primary", use_container_width=True):
             if not unit:
                 st.warning("請輸入單元名稱")
                 return
-            
             if not base_url_input:
-                st.error("⚠️ 請先填寫應用程式網址。如果您正在本機測試，可填入 http://localhost:8501")
+                st.error("⚠️ 請先填寫應用程式網址。")
                 return
 
             base_url = base_url_input.rstrip("/")
-            # [修改] 將設定的題目數量 (num_q) 加入 URL 參數
             params = {
                 "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type, "num_q": num_questions
             }
@@ -444,7 +471,6 @@ def render_teacher_input_screen():
             
             st.success("連結已產生！請複製下方連結給學生：")
             st.code(full_url, language="text")
-            st.caption("請複製上方連結傳送給學生。")
             
         st.markdown("---")
         st.markdown("### 🧪 教師試用")
@@ -452,7 +478,6 @@ def render_teacher_input_screen():
             if not unit:
                 st.warning("請輸入單元名稱")
             else:
-                # [修改] 將題數存入 session state config
                 st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type, 'num_questions': num_questions}
                 start_quiz_generation()
 
@@ -461,13 +486,11 @@ def render_student_welcome_screen():
     
     cfg = st.session_state.config
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
-    num_q = cfg.get('num_questions', 5) # 容錯處理：預設為5題
+    num_q = cfg.get('num_questions', 5) 
     
-    # [修改] 顯示即將面對的總題數，降低未知焦慮
     st.info(f"📋 測驗資訊：{cfg['grade']} 年級 {subject_map.get(cfg['subject'], '')} - {cfg['unit']} (共 {num_q} 題)")
     st.caption("本測驗將由 AI 老師為您即時生成題目，請放輕鬆作答。")
     
-    # [新增] 學生姓名輸入
     student_name = st.text_input("請輸入您的姓名或座號", placeholder="例如：01 王小明")
     
     if st.button("🚀 開始測驗", type="primary", use_container_width=True):
@@ -480,24 +503,22 @@ def render_student_welcome_screen():
 def start_quiz_generation():
     """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
-    num_q = cfg.get('num_questions', 5) # 容錯處理
+    num_q = cfg.get('num_questions', 5) 
     
-    with st.spinner(f"正在為您量身準備 {num_q} 道題目中..."):
-        # [修改] 將題數傳遞給生成函式
+    with st.spinner(f"正在為您量身準備 {num_q} 道題目中... 若遇流量尖峰可能會稍候幾秒鐘..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'], num_q)
         if questions:
-            # 重置所有與題目相關的狀態
             st.session_state.questions = questions
             st.session_state.current_q_index = 0
             st.session_state.history = []
             st.session_state.generated_diagnosis = ""
-            
-            # 強制重置解析狀態
             st.session_state.show_explanation = False 
             st.session_state.user_answer = None 
-            
             st.session_state.app_state = 'quiz'
             st.rerun()
+        else:
+            # 如果 generation 失敗回傳空陣列，需允許使用者重新操作
+            st.warning("無法取得題目，請稍後重試。")
 
 def render_quiz_screen():
     q_index = st.session_state.current_q_index
@@ -508,7 +529,6 @@ def render_quiz_screen():
         st.rerun()
         return
 
-    # 狀態防護
     if st.session_state.user_answer is None:
         st.session_state.show_explanation = False
 
@@ -527,7 +547,6 @@ def render_quiz_screen():
             "請選擇答案：", 
             current_q['options'], 
             index=st.session_state.user_answer,
-            # 移除 timestamp key，確保提交後可保持選取狀態
             key=f"radio_q{q_index}", 
             disabled=disable_interaction
         )
@@ -573,7 +592,6 @@ def render_result_screen():
 
     if correct_count == total_q: st.balloons()
 
-    # 確保 total_q 不為 0
     feedback = get_growth_mindset_feedback(correct_count, total_q) if total_q > 0 else {"title": "Error", "msg": "無題目數據"}
 
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
@@ -587,11 +605,9 @@ def render_result_screen():
 
     st.divider()
 
-    # 教師專用診斷 (Lazy Generation)
     incorrect_items = [h for h in history if not h['isCorrect']]
     if st.session_state.generated_diagnosis == "":
         if incorrect_items:
-            # 確保 config 有值
             grade = config.get('grade', 'unknown')
             subject = config.get('subject', 'unknown')
             unit = config.get('unit', 'unknown')
@@ -623,7 +639,6 @@ def render_result_screen():
             start_quiz_generation()
     else:
         if st.button("🔄 回到首頁", type="primary", use_container_width=True):
-            # 回到首頁時，徹底清空所有狀態，防止殘留
             st.session_state.app_state = 'input'
             st.session_state.questions = []
             st.session_state.history = []
@@ -638,10 +653,10 @@ def render_result_screen():
 # ==========================================
 
 def main():
+    # 只要網址帶有 role=student，就會直接進入「學生視角」，並跳過教師的設定畫面 (RBAC機制)
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
             try:
-                # [修改] 捕獲 num_q 參數，若無則預設為 5
                 st.session_state.config = {
                     "subject": st.query_params["subject"],
                     "grade": st.query_params["grade"],
@@ -654,6 +669,7 @@ def main():
                 st.error("連結參數有誤，請聯繫教師。")
                 return
 
+    # 狀態機路由
     if st.session_state.app_state == 'input':
         render_teacher_input_screen()
     elif st.session_state.app_state == 'student_ready':
