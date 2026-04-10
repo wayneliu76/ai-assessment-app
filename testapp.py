@@ -305,16 +305,12 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
-def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
-    """
-    呼叫 Gemini API 生成題目 (加入 Exponential Backoff 演算法處理 429 Rate Limit)
-    """
-    if not API_KEY:
-        st.error("未設定 API Key")
-        return []
-
+# [核心修復] 導入全域快取 (Cache Data)，TTL設定為1小時 (3600秒)
+# 這樣一來，只要是「同樣的科目、年級、單元、評量類型、題數」，系統就會直接從記憶體拿題目，不會消耗 API 額度！
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_api_call(subject, grade, unit, assess_type_key, num_questions):
+    """真正執行 API 呼叫的內部函式 (具備快取能力)"""
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
-    target_grade = int(grade)
     assess_info = ASSESSMENT_TYPES[assess_type_key]
 
     prompt = f"""
@@ -350,9 +346,8 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     ]
     """
 
-    # [關鍵修復] 指數退避演算法 (Exponential Backoff) 處理 429 錯誤
     max_retries = 3
-    base_delay = 5 # 起始等待秒數
+    base_delay = 5 
     
     for attempt in range(max_retries):
         try:
@@ -371,21 +366,37 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
             
         except Exception as e:
             error_msg = str(e).lower()
-            # 判斷是否為 Rate Limit (429) 或 Quota 錯誤
             if "429" in error_msg or "quota" in error_msg:
                 if attempt < max_retries - 1:
-                    # 加入 Jitter (抖動) 避免同時重試造成二次擁塞
                     delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
-                    st.toast(f"⚠️ API 流量限制 (429)。系統將在 {delay:.1f} 秒後自動重試 (第 {attempt + 1}/{max_retries - 1} 次)...")
                     time.sleep(delay)
                     continue
                 else:
-                    st.error("❌ 系統達到 API 每分鐘呼叫上限。請等待 1 分鐘後再試。")
-                    return []
+                    # 如果重試還是失敗，必須拋出例外，這樣 Streamlit 才「不會」把失敗的結果存入快取
+                    raise Exception("API Limit Reached")
             else:
-                # 其他非流量限制的錯誤直接拋出
-                st.error(f"題目生成失敗: {e}")
-                return []
+                raise Exception(f"題目生成失敗: {e}")
+                
+    raise Exception("未知錯誤導致無法生成題目。")
+
+def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
+    """
+    對外呼叫的包裝函式，負責捕捉快取函式拋出的例外並顯示 UI 錯誤
+    """
+    if not API_KEY:
+        st.error("未設定 API Key")
+        return []
+
+    try:
+        # 呼叫具有快取機制的函式
+        return _cached_api_call(subject, grade, unit, assess_type_key, num_questions)
+    except Exception as e:
+        error_msg = str(e)
+        if "API Limit Reached" in error_msg:
+            st.error("❌ 系統達到 API 每分鐘呼叫上限。因您連續測試過於頻繁，請等待 1 分鐘後再試。")
+        else:
+            st.error(error_msg)
+        return []
 
 def generate_diagnosis(history_items, grade, subject, unit):
     """生成教師專用的簡短診斷"""
@@ -409,7 +420,6 @@ def generate_diagnosis(history_items, grade, subject, unit):
     2. 教學建議：(一句話提供具體解法)
     """
     
-    # 針對診斷也加入簡單防護
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         return model.generate_content(prompt).text
@@ -424,7 +434,7 @@ def generate_diagnosis(history_items, grade, subject, unit):
 
 def render_teacher_input_screen():
     st.markdown("## 🎓 教育適性化評量系統 (教師端)")
-    st.caption("設定評量參數並產生學生連結")
+    st.caption("設定評量參數並產生學生連結與 QR Code")
 
     with st.container(border=True):
         col1, col2, col3 = st.columns([2, 2, 1.5])
@@ -434,7 +444,6 @@ def render_teacher_input_screen():
         with col2:
             grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
         with col3:
-            # 教師設定題目數量的輸入框 (確保在此畫面可見)
             num_questions = st.number_input("題目數量", min_value=1, max_value=10, value=5, step=1, help="建議適度設定題數以免學生認知負荷過高。")
             
         unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
@@ -444,17 +453,18 @@ def render_teacher_input_screen():
                                format_func=lambda x: f"{ASSESSMENT_TYPES[x]['label']} - {ASSESSMENT_TYPES[x]['desc']}")
         
         st.markdown("---")
-        st.markdown("### 🔗 產生學生連結")
+        st.markdown("### 🔗 發布測驗")
         
-        with st.expander("❓ 如何讓學生使用？(必讀)"):
+        with st.expander("❓ 如何發布給學生？(必讀)"):
             st.markdown("""
             1. 此程式必須 **部署 (Deploy)** 到網路上。
-            2. 將網址貼入下方欄位，即可產生專屬連結。
+            2. 將網址貼入下方欄位，系統將自動產生專屬連結與 **QR Code**。
+            3. 將 QR Code 投影在電子白板上，學生使用平板掃描即可立刻進入測驗。
             """)
 
-        base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="請在此貼上瀏覽器上方的網址")
+        base_url_input = st.text_input("請貼上您的應用程式網址", placeholder="請在此貼上瀏覽器上方的網址 (如 [https://your-app.streamlit.app](https://your-app.streamlit.app))")
         
-        if st.button("產生連結", type="primary", use_container_width=True):
+        if st.button("產生測驗連結與 QR Code", type="primary", use_container_width=True):
             if not unit:
                 st.warning("請輸入單元名稱")
                 return
@@ -469,8 +479,20 @@ def render_teacher_input_screen():
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
             
-            st.success("連結已產生！請複製下方連結給學生：")
-            st.code(full_url, language="text")
+            encoded_url = urllib.parse.quote(full_url)
+            qr_api_url = f"[https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=](https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=){encoded_url}"
+            
+            st.success("✅ 測驗發布成功！請將以下 QR Code 投影或提供連結給學生：")
+            
+            disp_col1, disp_col2 = st.columns([1, 2])
+            with disp_col1:
+                st.markdown("**📱 學生行動裝置掃描區**")
+                st.image(qr_api_url, use_column_width=True)
+            
+            with disp_col2:
+                st.markdown("**🔗 電腦端文字連結**")
+                st.code(full_url, language="text")
+                st.caption("若學生使用電腦，可直接複製上方網址傳送。")
             
         st.markdown("---")
         st.markdown("### 🧪 教師試用")
@@ -505,7 +527,8 @@ def start_quiz_generation():
     cfg = st.session_state.config
     num_q = cfg.get('num_questions', 5) 
     
-    with st.spinner(f"正在為您量身準備 {num_q} 道題目中... 若遇流量尖峰可能會稍候幾秒鐘..."):
+    # 提示文字更新，告知若是相同的單元會直接從快取載入
+    with st.spinner(f"正在為您量身準備 {num_q} 道題目中 (若為相同單元將由快取秒速載入)..."):
         questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'], num_q)
         if questions:
             st.session_state.questions = questions
@@ -517,7 +540,6 @@ def start_quiz_generation():
             st.session_state.app_state = 'quiz'
             st.rerun()
         else:
-            # 如果 generation 失敗回傳空陣列，需允許使用者重新操作
             st.warning("無法取得題目，請稍後重試。")
 
 def render_quiz_screen():
@@ -653,7 +675,6 @@ def render_result_screen():
 # ==========================================
 
 def main():
-    # 只要網址帶有 role=student，就會直接進入「學生視角」，並跳過教師的設定畫面 (RBAC機制)
     if "role" in st.query_params and st.query_params["role"] == "student":
         if st.session_state.app_state == 'input':
             try:
@@ -669,7 +690,6 @@ def main():
                 st.error("連結參數有誤，請聯繫教師。")
                 return
 
-    # 狀態機路由
     if st.session_state.app_state == 'input':
         render_teacher_input_screen()
     elif st.session_state.app_state == 'student_ready':
