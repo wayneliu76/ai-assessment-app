@@ -453,12 +453,15 @@ def render_teacher_input_screen():
     st.caption("設定評量參數並產生學生連結")
 
     with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            subject = st.selectbox("科目領域", ['chinese', 'math', 'science', 'social'], 
-                                   format_func=lambda x: {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}[x])
-        with col2:
-            grade = st.selectbox("年級", [1, 2, 3, 4, 5, 6], format_func=lambda x: f"{x} 年級")
+        subject_map = {'chinese':'國語', 'math':'數學', 'science':'自然科學', 'social':'社會'}
+        subject_keys = list(subject_map.keys())
+        subject_labels = list(subject_map.values())
+        subject_label = st.radio("科目領域", subject_labels, horizontal=True)
+        subject = subject_keys[subject_labels.index(subject_label)]
+
+        grade_labels = [f"{i} 年級" for i in range(1, 7)]
+        grade_label = st.radio("年級", grade_labels, horizontal=True)
+        grade = int(grade_label[0])
         
         unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
         
