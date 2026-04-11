@@ -398,13 +398,23 @@ def prefetch_question_bank(subject, grade, unit, assess_type_key, num_questions)
        這是一份「{assess_info['label']}」。請務必遵守以下出題邏輯：
        {assess_info['prompt_instruction']}
 
-    請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記。數學符號請使用 Unicode（+, -, ×, ÷），嚴禁 LaTeX。
+    4. **答案正確性自我驗證（CRITICAL — 最重要步驟）**：
+       每出完一題，你必須在內心執行以下流程，再繼續下一題：
+       - 步驟A【推導】：逐步寫出解題過程，得出答案。
+       - 步驟B【核對】：確認你填入 "ans" 的索引（0=A, 1=B, 2=C, 3=D）對應的選項，確實等於步驟A得出的答案。
+       - 步驟C【檢查誘答】：確認其他三個錯誤選項都確實是錯的。
+       - **如果核對有誤，必須修正後才能輸出**。請將推導過程填入 "reasoning" 欄位（供教師審核用）。
+
+    5. **數學符號規範**：請直接使用 Unicode（+, -, ×, ÷, =, >, <），嚴禁 LaTeX 語法。分數用 "1/2" 表示。
+
+    請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記：
     [
       {{
         "q": "題目內容",
         "options": ["選項A", "選項B", "選項C", "選項D"],
         "ans": 0,
-        "explanation": "詳細解析，針對學生錯誤提供引導。",
+        "reasoning": "【推導過程】逐步說明為何答案是選項A，以及其他三項為何錯誤。",
+        "explanation": "詳細解析，針對學生錯誤提供鷹架引導。",
         "bloomLevel": "認知層次"
       }}
     ]
@@ -420,10 +430,42 @@ def prefetch_question_bank(subject, grade, unit, assess_type_key, num_questions)
         if text.endswith("```"):
             text = text[:-3]
         questions = json.loads(text)
+        # 數學科：用 Python 嘗試自動驗算，標記可疑題目
+        if subject == 'math':
+            questions = _verify_math_questions(questions)
         bank[key] = questions
-        return True, f"題庫已建立（共 {len(questions)} 題）"
+        valid = sum(1 for q in questions if not q.get('_suspicious', False))
+        return True, f"題庫已建立（共 {len(questions)} 題，其中 {valid} 題通過自動驗算）"
     except Exception as e:
         return False, f"生成失敗：{e}"
+
+def _verify_math_questions(questions):
+    """
+    數學題自動驗算：嘗試用 Python eval 計算題目中的算式，
+    若計算結果與標記答案不符，標記 _suspicious=True 供教師注意。
+    """
+    import re
+    for q in questions:
+        try:
+            text = q['q']
+            correct_option = q['options'][q['ans']]
+            # 擷取題目中所有數字與算式，嘗試計算
+            # 支援：加減乘除、括號
+            expr_match = re.search(r'(\d+[\s]*[\+\-×÷\*\/][\s]*\d+(?:[\s]*[\+\-×÷\*\/][\s]*\d+)*)', text)
+            if expr_match:
+                expr = expr_match.group(1)
+                expr_py = expr.replace('×', '*').replace('÷', '/').replace(' ', '')
+                calculated = eval(expr_py)
+                # 嘗試從正確選項中取出數字
+                ans_num_match = re.search(r'(\d+(?:\.\d+)?)', correct_option)
+                if ans_num_match:
+                    ans_num = float(ans_num_match.group(1))
+                    if abs(calculated - ans_num) > 0.01:
+                        q['_suspicious'] = True
+                        q['_verify_note'] = f"Python 計算 {expr_py} = {calculated}，但標記答案含 {ans_num}"
+        except Exception:
+            pass  # 無法解析的題目不標記，不影響流程
+    return questions
 
 def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     """
@@ -559,6 +601,53 @@ def render_teacher_input_screen():
                 st.image(qr_img_url, caption="📱 學生掃描此 QR Code 即可開始測驗", width=240)
             st.caption("所有學生掃碼後將直接讀取已建立的題庫，不再重複呼叫 API。")
             
+        st.markdown("---")
+        st.markdown("### 🔍 題庫審核（建議發布前檢查）")
+        bank = get_question_bank()
+        review_key = _make_cache_key(subject, grade, unit, assess_type, num_questions)
+        if review_key in bank:
+            pool = bank[review_key]
+            suspicious = [q for q in pool if q.get('_suspicious')]
+            if suspicious:
+                st.warning(f"⚠️ 有 {len(suspicious)} 題被自動驗算標記為**可疑**，建議優先檢查。")
+            with st.expander(f"📋 檢視並編輯題庫（共 {len(pool)} 題）", expanded=False):
+                to_delete = []
+                for i, q in enumerate(pool):
+                    label_color = "🔴" if q.get('_suspicious') else "🟢"
+                    with st.container(border=True):
+                        st.markdown(f"**{label_color} 第 {i+1} 題**" + (" ⚠️ *自動驗算可疑*" if q.get('_suspicious') else ""))
+                        if q.get('_verify_note'):
+                            st.caption(f"驗算備註：{q['_verify_note']}")
+                        # 可編輯題目文字
+                        new_q = st.text_area(f"題目_{i}", value=q['q'], key=f"edit_q_{review_key}_{i}", label_visibility="collapsed")
+                        pool[i]['q'] = new_q
+                        # 顯示選項與正確答案
+                        for j, opt in enumerate(q['options']):
+                            marker = "✅" if j == q['ans'] else "　"
+                            new_opt = st.text_input(f"選項_{i}_{j}", value=opt, key=f"edit_opt_{review_key}_{i}_{j}", label_visibility="collapsed")
+                            pool[i]['options'][j] = new_opt
+                            if j == q['ans']:
+                                st.caption(f"{marker} 目前正確答案")
+                        # 修改正確答案
+                        new_ans = st.radio(
+                            "正確答案", options=[0,1,2,3],
+                            format_func=lambda x: f"{['A','B','C','D'][x]}. {pool[i]['options'][x]}",
+                            index=q['ans'], key=f"edit_ans_{review_key}_{i}", horizontal=True
+                        )
+                        pool[i]['ans'] = new_ans
+                        # 顯示 reasoning
+                        if q.get('reasoning'):
+                            st.caption(f"🧠 AI 推導：{q['reasoning']}")
+                        # 刪除按鈕
+                        if st.button(f"🗑️ 刪除此題", key=f"del_{review_key}_{i}"):
+                            to_delete.append(i)
+                if to_delete:
+                    bank[review_key] = [q for idx, q in enumerate(pool) if idx not in to_delete]
+                    st.success(f"已刪除 {len(to_delete)} 題，題庫剩餘 {len(bank[review_key])} 題。")
+                    st.rerun()
+        else:
+            st.info("請先點擊「產生連結並預先建立題庫」，再進行審核。")
+
         st.markdown("---")
         st.markdown("### 🧪 教師試用")
         if st.button("教師自己先試做", use_container_width=True):
