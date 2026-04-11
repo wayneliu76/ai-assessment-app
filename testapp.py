@@ -196,14 +196,19 @@ st.markdown("""
         box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
         overflow: hidden !important;
     }
-    /* 下拉選單每個選項 */
+    /* 下拉選單每個選項 — 用最高優先度覆蓋全域 color */
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="menu"] [role="option"],
+    div[data-baseweb="menu"] li *,
+    div[data-baseweb="menu"] [role="option"] * {
+        color: #F8FAFC !important;
+        background-color: #1E293B !important;
+    }
     div[data-baseweb="menu"] li,
     div[data-baseweb="menu"] [role="option"] {
-        color: #F1F5F9 !important;
-        background-color: #1E293B !important;
         padding: 10px 16px !important;
         font-size: 0.95rem !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         border-bottom: 1px solid #334155 !important;
         transition: background-color 0.15s ease !important;
     }
@@ -215,7 +220,11 @@ st.markdown("""
     div[data-baseweb="menu"] li:hover,
     div[data-baseweb="menu"] [role="option"]:hover,
     div[data-baseweb="menu"] li[aria-selected="true"],
-    div[data-baseweb="menu"] [role="option"][aria-selected="true"] {
+    div[data-baseweb="menu"] [role="option"][aria-selected="true"],
+    div[data-baseweb="menu"] li:hover *,
+    div[data-baseweb="menu"] [role="option"]:hover *,
+    div[data-baseweb="menu"] li[aria-selected="true"] *,
+    div[data-baseweb="menu"] [role="option"][aria-selected="true"] * {
         background-color: #4F46E5 !important;
         color: #FFFFFF !important;
     }
