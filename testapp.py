@@ -5,6 +5,7 @@ import time
 import urllib.parse
 import random
 import uuid
+import hashlib
 
 # ==========================================
 # 系統設定與學術常數定義
@@ -349,61 +350,68 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
-def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
+# ==========================================
+# 全 Server 共享題庫（cache_resource = 跨所有 session 共用）
+# 教師預先產生後，所有學生直接讀取，完全不打 API
+# ==========================================
+
+@st.cache_resource
+def get_question_bank():
+    """全 server 共享的題庫字典，key = 設定的 hash，value = 題目清單"""
+    return {}
+
+def _make_cache_key(subject, grade, unit, assess_type_key, num_questions):
+    raw = f"{subject}|{grade}|{unit}|{assess_type_key}|{num_questions}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+def prefetch_question_bank(subject, grade, unit, assess_type_key, num_questions):
     """
-    呼叫 Gemini API 生成題目
-    [關鍵功能] 負向限制 (Negative Constraints) 與適性化教學 (DAP) 實作
+    教師端主動呼叫：預先生成題庫並存入全 server 共享快取。
+    之後所有學生 session 直接讀取，不再打 API。
     """
-    if not API_KEY:
-        st.error("未設定 API Key")
-        return []
+    bank = get_question_bank()
+    key = _make_cache_key(subject, grade, unit, assess_type_key, num_questions)
+    if key in bank:
+        return True, "（已有快取，直接使用）"
 
     subject_map = {'chinese': '國語', 'math': '數學', 'science': '自然科學', 'social': '社會'}
-    target_grade = int(grade)
-    next_grade = target_grade + 1
     assess_info = ASSESSMENT_TYPES[assess_type_key]
+    pool_size = max(num_questions * 3, 15)  # 題庫是需求量的 3 倍，最少 15 題
 
-    # [特別說明] 這裡的 Prompt 包含了您所強調的「內容效度」檢核機制與「數學符號」顯示規則
     prompt = f"""
-    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 {num_questions} 題單選題：
+    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 {pool_size} 題單選題作為題庫：
 
     1. **基本資訊**：
        - 對象：國小 {grade} 年級學生
        - 科目：{subject_map.get(subject, subject)}
        - 單元：{unit}
        - 語言：繁體中文 (台灣用語)
-    
+
     2. **嚴格的課程綱要對齊 (Strict Curriculum Alignment)**：
        - **核心鐵律**：出題範圍必須嚴格限制在台灣教育部「十二年國民基本教育課程綱要」的 {grade} 年級學習內容。
-       - **絕對禁止超綱 (No Out-of-Level Content)**：
-         - **自然科學範例**：若是 3-4 年級，僅限於觀察與現象描述。**嚴禁**出現「電壓」、「電阻」、「化學式」、「原子」、「萬有引力公式」等國中或高年級概念。
-         - **數學範例**：若是 1-2 年級，**嚴禁**出現「分數」、「小數」、「除法」。若是 3-4 年級，**嚴禁**出現「代數符號(x,y)」、「負數」、「圓周率」。
-       - 請確保題目敘述與選項的詞彙難度符合 {grade} 年級學生的認知發展階段 (Piaget's Concrete Operational Stage)。
+       - **絕對禁止超綱**：
+         - 自然科學 3-4 年級：嚴禁「電壓」「電阻」「化學式」「原子」等國中概念。
+         - 數學 1-2 年級：嚴禁「分數」「小數」「除法」。3-4 年級：嚴禁「代數符號」「負數」「圓周率」。
+       - 詞彙難度須符合 {grade} 年級認知發展階段。
 
     3. **評量類型專屬策略 (CRITICAL)**：
        這是一份「{assess_info['label']}」。請務必遵守以下出題邏輯：
        {assess_info['prompt_instruction']}
 
-    請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記。
-    **JSON 格式規範**：
-    1. 必須是合法的 JSON Array。
-    2. **數學符號規範 (CRITICAL)**：請**直接使用 Unicode 符號** (例如 +, -, ×, ÷, =, > , <)，**嚴禁**使用 LaTeX 語法 (如 \\times, \\div, \\frac)。這是一給國小學生看的，請保持格式簡單直觀。例如分數請用 "1/2" 表示。
-    
+    請嚴格遵守以下 JSON 格式回傳，不要有任何 Markdown 標記。數學符號請使用 Unicode（+, -, ×, ÷），嚴禁 LaTeX。
     [
       {{
         "q": "題目內容",
         "options": ["選項A", "選項B", "選項C", "選項D"],
-        "ans": 0, // 0-3
-        "explanation": "詳細解析。請針對學生的錯誤提供引導。",
-        "bloomLevel": "該題的認知層次" 
+        "ans": 0,
+        "explanation": "詳細解析，針對學生錯誤提供引導。",
+        "bloomLevel": "認知層次"
       }}
     ]
     """
-
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         response = model.generate_content(prompt)
-        
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
@@ -411,12 +419,38 @@ def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
-        
-        return json.loads(text)
+        questions = json.loads(text)
+        bank[key] = questions
+        return True, f"題庫已建立（共 {len(questions)} 題）"
     except Exception as e:
-        st.error(f"題目生成失敗: {e}")
+        return False, f"生成失敗：{e}"
+
+def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
+    """
+    學生端取題：從全 server 共享題庫隨機抽取，不打 API。
+    若題庫尚未建立（例如教師試用），則臨時生成。
+    """
+    if not API_KEY:
+        st.error("未設定 API Key")
         return []
 
+    bank = get_question_bank()
+    key = _make_cache_key(subject, grade, unit, assess_type_key, num_questions)
+
+    if key in bank:
+        pool = bank[key].copy()
+        random.shuffle(pool)
+        return pool[:num_questions]
+
+    # 題庫不存在（教師試用情境）→ 臨時生成，並順手存入快取
+    ok, msg = prefetch_question_bank(subject, grade, unit, assess_type_key, num_questions)
+    if ok and key in bank:
+        pool = bank[key].copy()
+        random.shuffle(pool)
+        return pool[:num_questions]
+
+    st.error("題目生成失敗，請稍後再試")
+    return []
 def generate_diagnosis(history_items, grade, subject, unit):
     """生成教師專用的簡短診斷"""
     if not API_KEY: return "未設定 API Key。"
@@ -487,7 +521,7 @@ def render_teacher_input_screen():
 
         base_url_input = st.text_input("請貼上您的應用程式網址 (例如 [https://....streamlit.app](https://....streamlit.app))", placeholder="請在此貼上瀏覽器上方的網址")
         
-        if st.button("產生連結", type="primary", use_container_width=True):
+        if st.button("產生連結並預先建立題庫", type="primary", use_container_width=True):
             if not unit:
                 st.warning("請輸入單元名稱")
                 return
@@ -496,6 +530,17 @@ def render_teacher_input_screen():
                 st.error("⚠️ 請先填寫應用程式網址。如果您正在本機測試，可填入 http://localhost:8501")
                 return
 
+            # ── 步驟一：預先生成題庫（存入全 server 共享快取）──
+            with st.spinner("⏳ 正在預先建立題庫，完成後學生才可掃碼進入..."):
+                ok, msg = prefetch_question_bank(subject, grade, unit, assess_type, num_questions)
+
+            if not ok:
+                st.error(f"❌ 題庫建立失敗：{msg}，請重試。")
+                return
+
+            st.success(f"✅ 題庫已就緒！{msg} 現在可以將連結或 QR Code 發給學生。")
+
+            # ── 步驟二：產生學生連結 ──
             base_url = base_url_input.rstrip("/")
             params = {
                 "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type,
@@ -504,9 +549,15 @@ def render_teacher_input_screen():
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
             
-            st.success("連結已產生！請複製下方連結給學生：")
             st.code(full_url, language="text")
-            st.caption("請複製上方連結傳送給學生。")
+            
+            # ── 步驟三：顯示 QR Code（無需安裝套件）──
+            encoded_url = urllib.parse.quote(full_url, safe='')
+            qr_img_url = f"https://api.qrserver.com/v1/create-qr-code/?size=240x240&data={encoded_url}&margin=10&color=1F2937&bgcolor=FFFFFF"
+            col_qr1, col_qr2, col_qr3 = st.columns([1, 1, 1])
+            with col_qr2:
+                st.image(qr_img_url, caption="📱 學生掃描此 QR Code 即可開始測驗", width=240)
+            st.caption("所有學生掃碼後將直接讀取已建立的題庫，不再重複呼叫 API。")
             
         st.markdown("---")
         st.markdown("### 🧪 教師試用")
