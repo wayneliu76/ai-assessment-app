@@ -125,7 +125,7 @@ st.markdown("""
         --text-main: #1F2937;
         --text-sub: #4B5563;
     }
-    html, body, [class*="css"] {
+    html, body, [class*="css"]:not([data-baseweb="menu"]):not([data-baseweb="popover"]) {
         font-family: 'Inter', sans-serif;
         color: var(--text-main) !important; 
         background-color: var(--bg-color);
@@ -172,7 +172,7 @@ st.markdown("""
         color: #000000 !important;
         font-family: 'Courier New', Courier, monospace !important;
     }
-    /* 下拉選單高對比度修正 */
+    /* 下拉選單 — 觸發框 */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
         color: #111827 !important;
@@ -185,48 +185,63 @@ st.markdown("""
         color: #111827 !important;
         font-weight: 500 !important;
     }
-    /* 展開的下拉清單容器 */
+    /* 展開的下拉浮層 */
     div[data-baseweb="popover"] {
         z-index: 9999 !important;
     }
-    div[data-baseweb="menu"] {
-        background-color: #1E293B !important;
+    /* 選單外框：白底 + 深色邊框 */
+    div[data-baseweb="menu"],
+    div[data-baseweb="menu"] > div,
+    div[data-baseweb="menu"] ul {
+        background-color: #FFFFFF !important;
         border: 2px solid #4F46E5 !important;
         border-radius: 10px !important;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+        box-shadow: 0 8px 24px rgba(79,70,229,0.15) !important;
         overflow: hidden !important;
     }
-    /* 下拉選單每個選項 — 用最高優先度覆蓋全域 color */
-    div[data-baseweb="menu"] li,
-    div[data-baseweb="menu"] [role="option"],
-    div[data-baseweb="menu"] li *,
-    div[data-baseweb="menu"] [role="option"] * {
-        color: #F8FAFC !important;
-        background-color: #1E293B !important;
-    }
-    div[data-baseweb="menu"] li,
-    div[data-baseweb="menu"] [role="option"] {
+    /* 每個選項：白底 + 深黑字（不受全域規則干擾） */
+    div[data-baseweb="menu"] li {
+        background-color: #FFFFFF !important;
+        border-bottom: 1px solid #E5E7EB !important;
         padding: 10px 16px !important;
         font-size: 0.95rem !important;
         font-weight: 600 !important;
-        border-bottom: 1px solid #334155 !important;
-        transition: background-color 0.15s ease !important;
+        transition: all 0.15s ease !important;
     }
-    div[data-baseweb="menu"] li:last-child,
-    div[data-baseweb="menu"] [role="option"]:last-child {
+    div[data-baseweb="menu"] li:last-child {
         border-bottom: none !important;
     }
-    /* Hover 與已選取狀態 */
-    div[data-baseweb="menu"] li:hover,
-    div[data-baseweb="menu"] [role="option"]:hover,
-    div[data-baseweb="menu"] li[aria-selected="true"],
-    div[data-baseweb="menu"] [role="option"][aria-selected="true"],
-    div[data-baseweb="menu"] li:hover *,
-    div[data-baseweb="menu"] [role="option"]:hover *,
-    div[data-baseweb="menu"] li[aria-selected="true"] *,
-    div[data-baseweb="menu"] [role="option"][aria-selected="true"] * {
+    /* 強制所有選項文字為深黑色 */
+    div[data-baseweb="menu"] li div,
+    div[data-baseweb="menu"] li span,
+    div[data-baseweb="menu"] li p,
+    div[data-baseweb="menu"] li * {
+        color: #111827 !important;
+        background-color: transparent !important;
+    }
+    /* Hover：紫底白字 */
+    div[data-baseweb="menu"] li:hover {
         background-color: #4F46E5 !important;
+        border-bottom-color: #4338CA !important;
+    }
+    div[data-baseweb="menu"] li:hover div,
+    div[data-baseweb="menu"] li:hover span,
+    div[data-baseweb="menu"] li:hover p,
+    div[data-baseweb="menu"] li:hover * {
         color: #FFFFFF !important;
+        background-color: transparent !important;
+    }
+    /* 已選取：淡紫底 + 深紫字 */
+    div[data-baseweb="menu"] li[aria-selected="true"] {
+        background-color: #EEF2FF !important;
+    }
+    div[data-baseweb="menu"] li[aria-selected="true"] div,
+    div[data-baseweb="menu"] li[aria-selected="true"] span,
+    div[data-baseweb="menu"] li[aria-selected="true"] p,
+    div[data-baseweb="menu"] li[aria-selected="true"] * {
+        color: #4F46E5 !important;
+        font-weight: 700 !important;
+        background-color: transparent !important;
     }
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
