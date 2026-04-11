@@ -185,64 +185,75 @@ st.markdown("""
         color: #111827 !important;
         font-weight: 500 !important;
     }
-    /* 展開的下拉浮層 */
-    div[data-baseweb="popover"] {
-        z-index: 9999 !important;
-    }
-    /* 選單外框：白底 + 深色邊框 */
-    div[data-baseweb="menu"],
-    div[data-baseweb="menu"] > div,
-    div[data-baseweb="menu"] ul {
-        background-color: #FFFFFF !important;
-        border: 2px solid #4F46E5 !important;
-        border-radius: 10px !important;
-        box-shadow: 0 8px 24px rgba(79,70,229,0.15) !important;
-        overflow: hidden !important;
-    }
-    /* 每個選項：白底 + 深黑字（不受全域規則干擾） */
-    div[data-baseweb="menu"] li {
-        background-color: #FFFFFF !important;
-        border-bottom: 1px solid #E5E7EB !important;
-        padding: 10px 16px !important;
-        font-size: 0.95rem !important;
-        font-weight: 600 !important;
-        transition: all 0.15s ease !important;
-    }
-    div[data-baseweb="menu"] li:last-child {
-        border-bottom: none !important;
-    }
-    /* 強制所有選項文字為深黑色 */
-    div[data-baseweb="menu"] li div,
-    div[data-baseweb="menu"] li span,
-    div[data-baseweb="menu"] li p,
-    div[data-baseweb="menu"] li * {
-        color: #111827 !important;
-        background-color: transparent !important;
-    }
-    /* Hover：紫底白字 */
-    div[data-baseweb="menu"] li:hover {
-        background-color: #4F46E5 !important;
-        border-bottom-color: #4338CA !important;
-    }
-    div[data-baseweb="menu"] li:hover div,
-    div[data-baseweb="menu"] li:hover span,
-    div[data-baseweb="menu"] li:hover p,
-    div[data-baseweb="menu"] li:hover * {
-        color: #FFFFFF !important;
-        background-color: transparent !important;
-    }
-    /* 已選取：淡紫底 + 深紫字 */
-    div[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #EEF2FF !important;
-    }
-    div[data-baseweb="menu"] li[aria-selected="true"] div,
-    div[data-baseweb="menu"] li[aria-selected="true"] span,
-    div[data-baseweb="menu"] li[aria-selected="true"] p,
-    div[data-baseweb="menu"] li[aria-selected="true"] * {
-        color: #4F46E5 !important;
-        font-weight: 700 !important;
-        background-color: transparent !important;
-    }
+</style>
+""", unsafe_allow_html=True)
+
+# 用 JS 將 dropdown 樣式注入到 document.head，才能覆蓋 Streamlit portal 層
+st.markdown("""
+<script>
+(function() {
+    const css = `
+        div[data-baseweb="popover"] { z-index: 9999 !important; }
+        div[data-baseweb="menu"],
+        div[data-baseweb="menu"] > div,
+        div[data-baseweb="menu"] ul {
+            background-color: #FFFFFF !important;
+            border: 2px solid #4F46E5 !important;
+            border-radius: 10px !important;
+            box-shadow: 0 8px 24px rgba(79,70,229,0.2) !important;
+            overflow: hidden !important;
+        }
+        div[data-baseweb="menu"] li {
+            background-color: #FFFFFF !important;
+            color: #111827 !important;
+            border-bottom: 1px solid #E5E7EB !important;
+            padding: 10px 16px !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            transition: all 0.15s ease !important;
+        }
+        div[data-baseweb="menu"] li:last-child { border-bottom: none !important; }
+        div[data-baseweb="menu"] li div,
+        div[data-baseweb="menu"] li span,
+        div[data-baseweb="menu"] li p,
+        div[data-baseweb="menu"] li * {
+            color: #111827 !important;
+            background-color: transparent !important;
+        }
+        div[data-baseweb="menu"] li:hover {
+            background-color: #4F46E5 !important;
+            color: #FFFFFF !important;
+        }
+        div[data-baseweb="menu"] li:hover *,
+        div[data-baseweb="menu"] li:hover div,
+        div[data-baseweb="menu"] li:hover span {
+            color: #FFFFFF !important;
+            background-color: transparent !important;
+        }
+        div[data-baseweb="menu"] li[aria-selected="true"] {
+            background-color: #EEF2FF !important;
+        }
+        div[data-baseweb="menu"] li[aria-selected="true"] *,
+        div[data-baseweb="menu"] li[aria-selected="true"] div,
+        div[data-baseweb="menu"] li[aria-selected="true"] span {
+            color: #4F46E5 !important;
+            font-weight: 700 !important;
+            background-color: transparent !important;
+        }
+    `;
+    const style = document.createElement('style');
+    style.id = 'dropdown-fix';
+    style.textContent = css;
+    // 移除舊的避免重複
+    const old = document.getElementById('dropdown-fix');
+    if (old) old.remove();
+    document.head.appendChild(style);
+})();
+</script>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
         background-color: #FFFFFF !important;
