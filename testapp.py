@@ -110,6 +110,8 @@ if 'config' not in st.session_state:
     st.session_state.config = {}
 if 'student_name' not in st.session_state:
     st.session_state.student_name = "Unknown"
+if 'num_questions' not in st.session_state:
+    st.session_state.num_questions = 5
 
 # [CSS 重構] 現代化 UI/UX 設計 - 高對比度與易讀性優化
 st.markdown("""
@@ -173,23 +175,49 @@ st.markdown("""
     /* 下拉選單高對比度修正 */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF !important;
-        color: #1F2937 !important;
-        border-color: #D1D5DB !important;
+        color: #111827 !important;
+        border: 2px solid #D1D5DB !important;
+        border-radius: 8px !important;
     }
-    div[data-baseweb="select"] span {
-        color: #1F2937 !important;
+    div[data-baseweb="select"] span,
+    div[data-baseweb="select"] div[class*="placeholder"],
+    div[data-baseweb="select"] div[class*="singleValue"] {
+        color: #111827 !important;
+        font-weight: 500 !important;
+    }
+    /* 展開的下拉清單容器 */
+    div[data-baseweb="popover"] {
+        z-index: 9999 !important;
     }
     div[data-baseweb="menu"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E5E7EB !important;
+        background-color: #1E293B !important;
+        border: 2px solid #4F46E5 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+        overflow: hidden !important;
     }
-    div[data-baseweb="menu"] li {
-        color: #1F2937 !important; 
-        background-color: #FFFFFF !important;
+    /* 下拉選單每個選項 */
+    div[data-baseweb="menu"] li,
+    div[data-baseweb="menu"] [role="option"] {
+        color: #F1F5F9 !important;
+        background-color: #1E293B !important;
+        padding: 10px 16px !important;
+        font-size: 0.95rem !important;
+        font-weight: 500 !important;
+        border-bottom: 1px solid #334155 !important;
+        transition: background-color 0.15s ease !important;
     }
-    div[data-baseweb="menu"] li:hover, div[data-baseweb="menu"] li[aria-selected="true"] {
-        background-color: #EEF2FF !important;
-        color: var(--primary-color) !important;
+    div[data-baseweb="menu"] li:last-child,
+    div[data-baseweb="menu"] [role="option"]:last-child {
+        border-bottom: none !important;
+    }
+    /* Hover 與已選取狀態 */
+    div[data-baseweb="menu"] li:hover,
+    div[data-baseweb="menu"] [role="option"]:hover,
+    div[data-baseweb="menu"] li[aria-selected="true"],
+    div[data-baseweb="menu"] [role="option"][aria-selected="true"] {
+        background-color: #4F46E5 !important;
+        color: #FFFFFF !important;
     }
     /* Radio Button 選項高對比度修正 */
     div[role="radiogroup"] label {
@@ -286,7 +314,7 @@ def get_growth_mindset_feedback(correct_count, total_q):
     
     return random.choice(messages)
 
-def generate_questions(subject, grade, unit, assess_type_key):
+def generate_questions(subject, grade, unit, assess_type_key, num_questions=5):
     """
     呼叫 Gemini API 生成題目
     [關鍵功能] 負向限制 (Negative Constraints) 與適性化教學 (DAP) 實作
@@ -302,7 +330,7 @@ def generate_questions(subject, grade, unit, assess_type_key):
 
     # [特別說明] 這裡的 Prompt 包含了您所強調的「內容效度」檢核機制與「數學符號」顯示規則
     prompt = f"""
-    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 5 題單選題：
+    你是一位專業的台灣國小教師與教育測驗專家。請根據以下嚴格規範出 {num_questions} 題單選題：
 
     1. **基本資訊**：
        - 對象：國小 {grade} 年級學生
@@ -399,6 +427,10 @@ def render_teacher_input_screen():
         
         unit = st.text_input("單元/主題關鍵字", placeholder="例如：分數的加減")
         
+        num_questions = st.slider("題目數量", min_value=3, max_value=15, value=st.session_state.num_questions, step=1,
+                                  help="設定本次測驗的題目總數（3～15 題）")
+        st.session_state.num_questions = num_questions
+
         # 顯示評量類型的詳細說明，幫助教師選擇
         assess_type = st.radio("評量類型", 
                                options=['placement', 'diagnostic', 'formative_small', 'formative_large', 'summative'],
@@ -428,7 +460,8 @@ def render_teacher_input_screen():
 
             base_url = base_url_input.rstrip("/")
             params = {
-                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type
+                "role": "student", "subject": subject, "grade": grade, "unit": unit, "type": assess_type,
+                "num_q": num_questions
             }
             query_string = urllib.parse.urlencode(params)
             full_url = f"{base_url}/?{query_string}"
@@ -443,7 +476,7 @@ def render_teacher_input_screen():
             if not unit:
                 st.warning("請輸入單元名稱")
             else:
-                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type}
+                st.session_state.config = {'subject': subject, 'grade': grade, 'unit': unit, 'assess_type': assess_type, 'num_questions': num_questions}
                 start_quiz_generation()
 
 def render_student_welcome_screen():
@@ -469,7 +502,7 @@ def start_quiz_generation():
     """開始生成題目並重置相關狀態"""
     cfg = st.session_state.config
     with st.spinner("正在準備試卷中..."):
-        questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'])
+        questions = generate_questions(cfg['subject'], cfg['grade'], cfg['unit'], cfg['assess_type'], cfg.get('num_questions', 5))
         if questions:
             # 重置所有與題目相關的狀態
             st.session_state.questions = questions
@@ -630,7 +663,8 @@ def main():
                     "subject": st.query_params["subject"],
                     "grade": st.query_params["grade"],
                     "unit": st.query_params["unit"],
-                    "assess_type": st.query_params["type"]
+                    "assess_type": st.query_params["type"],
+                    "num_questions": int(st.query_params.get("num_q", 5))
                 }
                 st.session_state.app_state = 'student_ready'
             except Exception:
